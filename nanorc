@@ -1,3 +1,6 @@
+## For a full list of available options:
+## https://www.nano-editor.org/dist/latest/nanorc.5.html
+
 ## Display line numbers to the left (and any anchors in the margin)
 set linenumbers
 
