@@ -9,14 +9,14 @@ if [ -f ~/.bashrc ]; then
 
     case $yn in
         y )
-            curl -o https://raw.githubusercontent.com/asiangoldfish/configspack/main/bashrc ~/.bashrc
+            curl -o ~/.bashrc https://raw.githubusercontent.com/asiangoldfish/configspack/main/bashrc
             ;;
         * )
             printf "Skipping .bashrc\n"
             ;;
     esac
 else
-    curl -o https://raw.githubusercontent.com/asiangoldfish/configspack/main/bashrc ~/.bashrc
+    curl -o ~/.bashrc https://raw.githubusercontent.com/asiangoldfish/configspack/main/bashrc
 
 fi
 
@@ -25,14 +25,14 @@ if [ -f ~/.nanorc ]; then
 
     case $yn in
         y )
-            curl -o https://raw.githubusercontent.com/asiangoldfish/configspack/main/nanorc ~/.nanorc
+            curl -o ~/.nanorc https://raw.githubusercontent.com/asiangoldfish/configspack/main/nanorc
             ;;
         * )
             printf "Skipping .nanorc\n"
             ;;
     esac
 else
-    curl -o https://raw.githubusercontent.com/asiangoldfish/configspack/main/nanorc ~/.nanorc
+    curl -o ~/.nanorc https://raw.githubusercontent.com/asiangoldfish/configspack/main/nanorc
 
 fi
 
