@@ -6,8 +6,20 @@
 [[ $- != *i* ]] && return
 
 ## Styling
-# Shell: Read more about colourizing the shell here: https://linoxide.com/change-linux-shell-prompt-with-different-colors/
-export PS1='\[\e[32m\u\] \[\e[36m\w\] \[\e[34m\]\[\e[1m\]$ \[\e[0m\]'
+# Shell: Read more about colourizing the shell here:
+# https://www.luossfi.org/blog/2021/02/linux-colorful-bash-prompt/
+GREEN='\[\e[92m\]' 
+RED='\[\e[91m\]' 
+CYAN='\[\e[96m\]' 
+YELLOW='\[\e[93m\]' 
+RESET='\[\e[0m\]' 
+if [ "$(whoami)" = 'root' ] 
+then
+  PS1="${RESET}[${RED}\u${RESET}@${CYAN}\h ${YELLOW}\w${RESET}]\$ " 
+else
+  PS1="${RESET}[${GREEN}\u${RESET}@${CYAN}\h ${YELLOW}\w${RESET}]\$ " 
+fi
+
 # Colourful ls commands
 alias ls='ls --color=auto'
 alias grep='grep --color=auto'
