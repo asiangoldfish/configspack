@@ -12,3 +12,4 @@ Simply copy the appropriate files from this repository manually, or use the foll
 ```
 curl "https://raw.githubusercontent.com/asiangoldfish/configspack/main/install.sh" | sh
 ```
+Existing files will not be overridden.
