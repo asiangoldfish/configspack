@@ -10,19 +10,19 @@ if ! command -v curl &> /dev/null; then
 fi
 
 if [ -f ~/.bashrc ]; then
-    file_exists() ".bashrc"
+    file_exists ".bashrc"
 else
     curl -o ~/.bashrc https://raw.githubusercontent.com/asiangoldfish/configspack/main/bashrc
 fi
 
 if [ -f ~/.nanorc ]; then
-    file_exists() ".nanorc"
+    file_exists ".nanorc"
 else
     curl -o ~/.nanorc https://raw.githubusercontent.com/asiangoldfish/configspack/main/nanorc
 fi
 
 if [ -f ~/.xinitrc ]; then
-    file_exists() ".xinitrc"
+    file_exists ".xinitrc"
 else
     curl -o ~/.xinitrc https://raw.githubusercontent.com/asiangoldfish/configspack/main/xinitrc
 fi
