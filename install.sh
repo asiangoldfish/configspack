@@ -5,35 +5,21 @@ if ! command -v curl &> /dev/null; then
 fi
 
 if [ -f ~/.bashrc ]; then
-    read -p "File .bashrc already exists. Overwrite? [y/n]" yn
-
-    case $yn in
-        y )
-            curl -o ~/.bashrc https://raw.githubusercontent.com/asiangoldfish/configspack/main/bashrc
-            ;;
-        * )
-            printf "Skipping .bashrc\n"
-            ;;
-    esac
+    printf "Skipping .bashrc\n"
 else
     curl -o ~/.bashrc https://raw.githubusercontent.com/asiangoldfish/configspack/main/bashrc
-
 fi
 
 if [ -f ~/.nanorc ]; then
-    read -p "File .nanorc already exists. Overwrite? [y/n]" yn
-
-    case $yn in
-        y )
-            curl -o ~/.nanorc https://raw.githubusercontent.com/asiangoldfish/configspack/main/nanorc
-            ;;
-        * )
-            printf "Skipping .nanorc\n"
-            ;;
-    esac
+    printf "Skipping .nanorc\n"
 else
     curl -o ~/.nanorc https://raw.githubusercontent.com/asiangoldfish/configspack/main/nanorc
+fi
 
+if [ -f ~/.xinitrc ]; then
+    printf "Skipping .xinitrc\n"
+else
+    curl -o ~/.xinitrc https://raw.githubusercontent.com/asiangoldfish/configspack/main/xinitrc
 fi
 
 printf "Installation complete!\n"
