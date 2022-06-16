@@ -1,0 +1,9 @@
+## Git autocompletion
+if command -v git &>/dev/null; then
+    if [ -f "/usr/share/git/completion/git-completion.bash" ]; then
+        source "/usr/share/git/completion/git-completion.bash"
+    elif [ -f "/usr/share/bash-completion/completions/git" ]; then
+        source "/usr/share/bash-completion/completions/git"
+    fi
+fi
+

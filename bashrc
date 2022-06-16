@@ -39,8 +39,8 @@ if [ -x /usr/bin/dircolors ]; then
     #alias vdir='vdir --color=auto'
 
     #alias grep='grep --color=auto'
-    #alias fgrep='fgrep --color=auto'
     #alias egrep='egrep --color=auto'
+    #alias fgrep='fgrep --color=auto'
 fi
 
 # Alias definitions.
@@ -57,8 +57,8 @@ fi
 # Make sure that the file "/usr/share/bash-completion/bash_completion" exists.
 if command -v sudo &> /dev/null; then complete -cf sudo; fi
 
-## Git autocompletion
 # Code taken from https://wiki.archlinux.org/title/Git#Bash_completion
+## Git autocompletion
 if command -v git &>/dev/null; then
     if [ -f "/usr/share/git/completion/git-completion.bash" ]; then
         source "/usr/share/git/completion/git-completion.bash"
