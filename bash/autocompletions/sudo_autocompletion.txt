@@ -1,6 +1,0 @@
-## Sudo autocompletion
-if [ -f "/usr/share/bash-completion/bash_completion" ]; then
-    if command -v sudo &> /dev/null; then complete -cf sudo; fi
-fi
-
-

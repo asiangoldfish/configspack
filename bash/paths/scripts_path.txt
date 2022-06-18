@@ -1,5 +1,0 @@
-## Custom scripts or commands
-# Create your custom commands here to change, improve or add new functionalities to your shell
-if [ -d "$HOME/Scripts" ]; then
-    PATH="$PATH:$HOME/Scripts"
-fi
