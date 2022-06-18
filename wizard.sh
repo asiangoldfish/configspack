@@ -2,7 +2,8 @@
 
 SCRIPT_PATH="$(dirname "$0")"
 TMP="$SCRIPT_PATH/tmp"
-
+NANORC="./hello.sh"
+BASHRC="./bashrc_test.sh"
 
 # include statements
 source "$SCRIPT_PATH/nano/setup.sh"

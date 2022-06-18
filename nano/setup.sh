@@ -1,8 +1,10 @@
 nano_setup () {
     ## File path variables
-    NANORC="./hello.sh"
-    #NANORC="$HOME/.NANORC"
     SYNTAX_HIGHLIGHTING="$SCRIPT_PATH/nano/syntax_highlighting.txt"
+
+    if [ ! -f "$NANORC" ]; then
+        touch "$NANORC"
+    fi
 
     ## Preset checks
     # Line numbers
