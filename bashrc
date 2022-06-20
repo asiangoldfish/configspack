@@ -52,7 +52,7 @@ if [ -f ~/.bash_aliases ]; then
     . ~/.bash_aliases
 fi
 
-## Autocompletion for sudo commands
+## Sudo autocompletion
 # Code taken from https://stackoverflow.com/questions/45532320/human-friendly-bash-auto-completion-with-sudo
 # Make sure that the file "/usr/share/bash-completion/bash_completion" exists.
 if command -v sudo &> /dev/null; then complete -cf sudo; fi
@@ -73,7 +73,7 @@ if [ -d "$HOME/Scripts" ]; then
     PATH="$PATH:$HOME/Scripts"
 fi
 
-## Dotnet CLI autocomplete
+## Dotnet autocompletion
 if command -v dotnet &>/dev/null; then
     _dotnet_bash_complete() {
         local word=${COMP_WORDS[COMP_CWORD]}
