@@ -1,6 +1,7 @@
-AUTOCOMPLETIONS="$TMP/bash_autocompletions.txt"
-COLOURIZE="$TMP/bash_colourize.txt"
-PATHS="$TMP/bash_paths.txt"
+AUTOCOMPLETIONS="$TMP/bash_autocompletions.tmp"
+COLOURIZE="$TMP/bash_colourize.tmp"
+PATHS="$TMP/bash_paths.tmp"
+MISC="$TMP/bash_misc.tmp"
 CONFIGS="$SCRIPT_PATH/bash/bash_configs.json"
 
 # Notes
@@ -69,24 +70,27 @@ json_value () {
 }
 
 bashrc_to_tmp () {
-    ### Copy current settings from bashrc into tmp file
-    ### Arguments:
-    ###     None
-    ### Results:
-    ###     None
+    ### Copies all settings from bashrc into tmp file
 
-    # Map all features of autocompletion in an array
-    mapfile -t features <<< "$(json_value json="$CONFIGS" key='.autocompletion | keys[]')"
+    # Maps each categories' settings to their designated tmp file
+    mapfile -t categories <<< "$(json_value json="$CONFIGS" key='. | keys[]')"
+    for category in "${categories[@]}"; do
 
-    # Find search strings for each feature based on json config file
-    for feature in "${features[@]}"; do
-        local search_phrase="$(json_value json="$CONFIGS" key=".autocompletion.$feature.search")"
-
-        # Copy settings from bashrc to tmp file
-        if [ ! -z "$(grep "$search_phrase" "$BASHRC")" ]; then
-            # If search phrase was found in bashrc, copy the given setting to tmp file
-            cat "$CONFIGS" | jq -r ".autocompletion.$feature.snippet" >> "$AUTOCOMPLETIONS"
-        fi
+        # Map all features of a given category in an array
+        mapfile -t features <<< "$(json_value json="$CONFIGS" key=".$category | keys[]")"
+    
+        # Find search strings for each feature based on json config file
+        for feature in "${features[@]}"; do
+            local search_phrase
+            search_phrase="$(json_value json="$CONFIGS" key=".autocompletion.$feature.search")"
+    
+            # Copy settings from bashrc to tmp file
+            if [ ! -z "$(grep "$search_phrase" "$BASHRC")" ]; then
+            
+                # If search phrase was found in bashrc, copy the given setting to tmp file
+                cat "$CONFIGS" | jq -r ".autocompletion.$feature.snippet" >> "$TMP/bash_$category.tmp"
+            fi
+        done
     done
 }
 
@@ -121,25 +125,32 @@ completions () {
     ### - Generates a temporary file storing selected features
 
     # This variable stores ON's and OFF's for each setting. Makes the selecion more dynamic.
-    local completion_check=()
+    local completion_options_array=()
 
     # Dynamically fetches all features to add from JSON config
     mapfile -t features <<< "$(json_value json="$CONFIGS" key='.autocompletion | keys[]')"
-
-    # Iterate over each feature
+    
+    # Get all names, search strings and ON/OFF statements and add them all to an array. Then, use the array in the whiptail checklist.
     for feature in "${features[@]}"; do
         # Fetches the search keyword from the JSON config
         search_phrase="$(json_value json="$CONFIGS" key=".autocompletion.$feature.search")"
         
+        # Add the variables to the dynamic array
+        completion_options_array+=( "$feature" "$search_phrase" )
+
         # If there already is a tmp file, then use settings from it instead of bashrc
-        if [ ! -z "$(grep "$search_phrase" "$AUTOCOMPLETIONS")" ]; then completion_check+=( "ON" ); else completion_check+=( "OFF" ); fi
+        if [ ! -z "$(grep "$search_phrase" "$AUTOCOMPLETIONS")" ]; then completion_options_array+=( "ON" ); else completion_options_array+=( "OFF" ); fi
     done
 
-    COMPLETION_OPTIONS="$(whiptail --title "Autocompletions" --checklist --separate-output "Select applications" --ok-button "Select" --cancel-button "Back" 10 78 5 \
-    "Sudo" "Execute super user commands" "${completion_check[0]}" \
-    "Git" "Version control system" "${completion_check[1]}" \
-    ".NET" "Microsoft .NET CLI" "${completion_check[2]}" \
-    3>&1 1>&2 2>&3)"
+    # Build the checklist menu
+    COMPLETION_OPTIONS="$(whiptail  --title "Autocompletions" \
+                                    --checklist \
+                                    --separate-output "Select applications" \
+                                    --ok-button "Select" \
+                                    --cancel-button "Back" \
+                                    10 78 5 \
+                                    "${completion_options_array[@]}" \
+                                    3>&1 1>&2 2>&3)"
 
     # Returns to bash menu if cancelled
     exitstatus=$?
@@ -150,20 +161,14 @@ completions () {
 
     mapfile -t completion_options <<< "$COMPLETION_OPTIONS"
 
+    # Iterator for getting iterated element in aray
     for option in "${completion_options[@]}"; do
-        case "$option" in
-            "Sudo")
-                eval "json_value json=$CONFIGS key=.autocompletion.sudo.snippet" >> "$AUTOCOMPLETIONS"
+        for feature in "${features[@]}"; do
+            if [ "$option" == "$feature" ]; then
+                eval "json_value json=$CONFIGS key=.autocompletion.$feature.snippet" >> "$AUTOCOMPLETIONS"
                 printf "\n\n" >> "$AUTOCOMPLETIONS"
-                ;;
-            "Git")
-                eval "json_value json=$CONFIGS key=.autocompletion.git.snippet" >> "$AUTOCOMPLETIONS"
-                printf "\n\n" >> "$AUTOCOMPLETIONS"
-                ;;
-            ".NET")
-                eval "json_value json=$CONFIGS key=.autocompletion.dotnet.snippet" >> "$AUTOCOMPLETIONS"
-                printf "\n\n" >> "$AUTOCOMPLETIONS"
-        esac
+            fi
+        done
     done
 
     bash_setup
