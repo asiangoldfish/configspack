@@ -28,6 +28,10 @@ main () {
                 ;;
             
             "Bash")
+                # Copy existing settings in bashrc to tmp file
+                # rm -r tmp
+                bashrc_to_tmp
+                
                 bash_setup
                 ;;
         esac

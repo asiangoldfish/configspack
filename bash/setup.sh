@@ -1,28 +1,79 @@
-AUTOCOMPLETIONS="$TMP/bash_autocompletions.tmp"
-COLOURIZE="$TMP/bash_colourize.tmp"
-PATHS="$TMP/bash_paths.tmp"
-MISC="$TMP/bash_misc.tmp"
-CONFIGS="$SCRIPT_PATH/bash/bash_configs.json"
+# shellcheck shell=bash
 
-# Notes
-# cat "autocompletion_test.json" | jq -r '.autocompletion.sudo.snippet' > bashtest.sh
+CONFIGS="$SCRIPT_PATH/configs/bashrc_configs.json"
 
-bash_setup () {
+# Maps each categories' settings to their designated tmp file
+mapfile -t CATEGORIES <<< "$(cat "$CONFIGS" | jq -r '.categories | keys[]')"
+
+TMP_FILES=()
+
+function throw_error
+{
+    ### Throws an error for debugging purposes
+    ### Arguments:
+    ###     - $1: Error message
+
+    # TODO - At the moment the below lines only returns the line number of caller
+    #        and not where the actual error is. Fix this so the error message
+    #        displays where the error actually is in line numbers.
+
+    printf '%s' "$(caller): "
+    printf '%s\n' "${1:-"Unknown error"}" 1>&2
+    exit 111
+}
+
+function get_subcategories() {
+    ### Returns the subcategories in a menu
+    ### Arguments:
+    ###     - category [string]: The category that this subcategories belong to
+    ###     - raw [bool]: Whether jq should return a string in raw format
+    ### Returns:
+    ###     - string(): A string array with subcategories
+    ### Example:
+    ###     - get_subcategory category="foo" raw=True
+
+    # Maps arguments to variables
+    for arg in "$@"; do
+        IFS="=" read -ra argv <<< "$arg"
+        case "${argv[0]}" in
+            "category") category="${argv[1]}";;
+            "raw") raw="${argv[1]}";;
+        esac
+        shift
+    done
+    
+    if [ "$category" = "" ]; then throw_error "${FUNCNAME} is missing named argument 'category'"; fi
+    if [ "$raw" = "" ]; then throw_error "${FUNCNAME} is missing named argument 'raw'"; fi
+
+    local subcategories
+    mapfile -t subcategories <<< "$(cat "$CONFIGS" | jq -r ".categories.$category.subCategory | keys[]")"
+
+    # Return statement
+    echo "${subcategories[@]}"
+}
+
+function bash_setup () {
     # Create a new bashrc if it doesn't already exists
     if [ ! -f "$BASHRC" ]; then touch "$BASHRC"; fi
 
-    # Copy existing settings in bashrc to tmp file
-    if [ ! -f "$AUTOCOMPLETIONS" ]; then bashrc_to_tmp; fi
+    # Creates a new menu based on the categories array and JSON config
+    new_menu=()
+
+    for category in "${CATEGORIES[@]}"; do
+        # Sub menu description
+        description="$(cat $CONFIGS | jq -r ".categories.$category.menuDescription")"
+
+        new_menu+=( "${category^}" )
+        new_menu+=( "$description" )
+    done
 
     # Bashrc Main Menu
-    BASH_MENU="$(whiptail --title "Configure Application" --menu "Select application to configure" --ok-button "Select" --cancel-button "Back" 10 78 3 \
-    "Autocompletions" "Tab complete commands" \
-    "Colourizations" "Colourize commands" \
-    "PATH" "Execute commands from anywhere" \
-    "History" "Customize the Bash history command" \
-    "Misc" "Other options" \
-    3>&1 1>&2 2>&3 )"
-
+    BASH_MENU="$(whiptail   --title "Configure Application" \
+                            --menu "Select application to configure" \
+                            --ok-button "Select" \
+                            --cancel-button "Back" 10 78 3 \
+                            "${new_menu[@]}" \
+                            3>&1 1>&2 2>&3 )"
     # Prompt the user to override bashrc with the new changes
     exitstatus=$?
     if [[ $exitstatus = 1 ]]; then override_bashrc; fi
@@ -30,71 +81,88 @@ bash_setup () {
     # Direct user to the selected menu
     mapfile -t bash_options <<< "$BASH_MENU"
 
+    # Iterator for getting iterated element in aray
+    i=0
     for option in "${bash_options[@]}"; do
-        case "$option" in
-            "Autocompletions") completions;;
-            "Colourizations") colourizations;;
-            "PATH") path;;
-            "History") hist;;
-            "Misc") misc;;
-        esac
+        for category in "${CATEGORIES[@]}"; do
+            if [ "${option,}" == "$category" ]; then
+            completions "${category,}" "${TMP_FILES[$i]}"
+            break
+            fi
+        done
+        i+=1
     done
 }
 
-json_value () {
-    ### Finds the value of a given key in a JSON file.
+function generate_tmp() {
+    ### Generates a new temporary file
+    ### The file name has the format xxx.yyy.tmp where x is the dotfile
+    ### name and y is the subcategory name.
+    ###
     ### Arguments:
-    ###     - json [string]: JSON file to search for keys
-    ###     - key [string]:  The key whose value belongs to. Nest keys wih the
-    ###                      delimiter '.'
-    ### Example:
-    ###     - Given the following JSON:
-    ###       "{
-    ###           "foo": {
-    ###               "bar": "hello"
-    ###           }
-    ###       }",
-    ###       the key to find "hello" is: ".foo.bar"
+    ###     - $1 [string]: Target directory to store the file
+    ###     - $2 [string]: Dotfile name
+    ###     - $3 [string]: Subcategory name
+    ###     - $4 [bool]: Replace old file?
 
-    # Maps arguments to variables
-    for arg in "$@"; do
-        IFS="=" read -ra argv <<< "$arg"
-        case "${argv[0]}" in
-            "json") local json="${argv[1]}";;
-            "key") local key="${argv[1]}";;
-        esac
-    done
+    # Throw an error if there are missing arguments
+    if [ "$1" = "" ]; then throw_error "Missing positional argument target directory"; fi
+    if [ "$2" = "" ]; then throw_error "Missing positional argument dotfile name"; fi
+    if [ "$3" = "" ]; then throw_error "Missing positional argument subcategory directory"; fi
     
-    local result="$(cat "$json" | jq -r "$key")"
-    echo "$result"
+    # Map args to variables
+    target="$1"; dotfile="$2"; subcategory="$3"; replace="$4"
+
+    # The tmp file name
+    local tmp_file="$dotfile.$subcategory.tmp"
+
+    # Remove the old tmp file
+    if [ "$replace" = True ] && [ -f "$target/$tmp_file" ]; then rm "$target/$tmp_file"; fi
+
+    # Create new tmp file if one doesn't already exist
+    if [ ! -f "$target/$tmp_file" ]; then touch "$target/$tmp_file"; fi
+
+    return 0
 }
 
-bashrc_to_tmp () {
-    ### Copies all settings from bashrc into tmp file
+function bashrc_to_tmp () {
+    ### Copies all settings from bashrc into temporary files.
+    ### Each JSON config first depth key is considered a category.
+    ### Each category receives its own temporary file. Ex: bash_category.tmp
+    ### Settings from bashrc is copied to the appropriate temporary file.
+    for category in "${CATEGORIES[@]}"; do
 
-    # Maps each categories' settings to their designated tmp file
-    mapfile -t categories <<< "$(json_value json="$CONFIGS" key='. | keys[]')"
-    for category in "${categories[@]}"; do
+        # Temporary file to store settings in
+        tmp_file="$TMP/bashrc_$category.tmp"
+        if [ ! -d "$TMP" ]; then mkdir "$TMP"; fi
 
-        # Map all features of a given category in an array
-        mapfile -t features <<< "$(json_value json="$CONFIGS" key=".$category | keys[]")"
-    
-        # Find search strings for each feature based on json config file
-        for feature in "${features[@]}"; do
+        # Append the file to the global array variable of temporary files
+        TMP_FILES+=( "$tmp_file" )
+
+        local subs
+        mapfile -t subs <<< "$(get_subcategories category="$category" raw=True )"
+
+        echo "${subs[@]}"
+        exit
+
+        # Map all setting of a given category in an array
+        mapfile -t apps <<< "$(cat "$CONFIGS" | jq ".categories.$category.subCategory | keys[]")"
+
+        # Find "search" strings for each setting based on json config file
+        for app in "${apps[@]}"; do
             local search_phrase
-            search_phrase="$(json_value json="$CONFIGS" key=".autocompletion.$feature.search")"
-    
+            search_phrase="$(cat "$CONFIGS" | jq -r ".categories.$category.subCategory.$app.search")"
+
             # Copy settings from bashrc to tmp file
             if [ ! -z "$(grep "$search_phrase" "$BASHRC")" ]; then
-            
                 # If search phrase was found in bashrc, copy the given setting to tmp file
-                cat "$CONFIGS" | jq -r ".autocompletion.$feature.snippet" >> "$TMP/bash_$category.tmp"
+                cat "$CONFIGS" | jq -r ".categories.$category.subCategory.$app.snippet" >> "$tmp_file"
             fi
         done
     done
 }
 
-apply_checks () {
+function apply_checks () {
     ### Validates whether a file contains a given string
     ### Arguments:
     ###     - search [string]: Search by this string
@@ -117,7 +185,7 @@ apply_checks () {
     if [ ! -z "$(grep "$search" "$target")" ]; then return "ON"; else return "OFF"; fi
 }
 
-completions () {
+function completions () {
     ### Handles autocompletion related settings
     ###
     ### - Creates a checkbox menu to enable users picking their features of choice.
@@ -126,24 +194,30 @@ completions () {
 
     # This variable stores ON's and OFF's for each setting. Makes the selecion more dynamic.
     local completion_options_array=()
+    local category="$1"
+    local tmp_file="$2"
 
     # Dynamically fetches all features to add from JSON config
-    mapfile -t features <<< "$(json_value json="$CONFIGS" key='.autocompletion | keys[]')"
-    
+    mapfile -t features <<< "$(cat "$CONFIGS" | jq -r ".categories.autocompletion.subCategory | keys[]")"
+
     # Get all names, search strings and ON/OFF statements and add them all to an array. Then, use the array in the whiptail checklist.
     for feature in "${features[@]}"; do
         # Fetches the search keyword from the JSON config
-        search_phrase="$(json_value json="$CONFIGS" key=".autocompletion.$feature.search")"
-        
+        #search_phrase="$(cat "$CONFIGS" | jq ".categories.$category.subCategory.$feature.search")"
+
+	    search_phrase="$(cat "$CONFIGS"  | jq ".categories.$category.subCategory.$feature.search")"
+
         # Add the variables to the dynamic array
         completion_options_array+=( "$feature" "$search_phrase" )
 
         # If there already is a tmp file, then use settings from it instead of bashrc
-        if [ ! -z "$(grep "$search_phrase" "$AUTOCOMPLETIONS")" ]; then completion_options_array+=( "ON" ); else completion_options_array+=( "OFF" ); fi
+        if grep -q "$search_phrase" "$tmp_file"; then completion_options_array+=( "OFF" ); echo "OFF"; else completion_options_array+=( "ON" ); echo "ON"; fi
     done
 
+    exit
+
     # Build the checklist menu
-    COMPLETION_OPTIONS="$(whiptail  --title "Autocompletions" \
+    COMPLETION_OPTIONS="$(whiptail  --title "${category^}" \
                                     --checklist \
                                     --separate-output "Select applications" \
                                     --ok-button "Select" \
@@ -157,7 +231,7 @@ completions () {
     if [ $exitstatus = 1 ]; then bash_setup; fi
 
     # Wipe the old tmp file
-    if [ -f "$AUTOCOMPLETIONS" ]; then rm "$AUTOCOMPLETIONS"; fi
+    if [ -f "$tmp_file" ]; then rm "$tmp_file"; fi
 
     mapfile -t completion_options <<< "$COMPLETION_OPTIONS"
 
@@ -165,8 +239,8 @@ completions () {
     for option in "${completion_options[@]}"; do
         for feature in "${features[@]}"; do
             if [ "$option" == "$feature" ]; then
-                eval "json_value json=$CONFIGS key=.autocompletion.$feature.snippet" >> "$AUTOCOMPLETIONS"
-                printf "\n\n" >> "$AUTOCOMPLETIONS"
+                cat "$CONFIGS" | jq .categories."$0".subCategory."$feature".snippet >> "$tmp_file"
+                printf "\n\n" >> "$tmp_file"
             fi
         done
     done
@@ -174,162 +248,12 @@ completions () {
     bash_setup
 }
 
-colourizations () {
-    path="$SCRIPT_PATH/bash/colourizations"    # Path to autocompletions
-    prompt="$(cat "$path/prompt_colourize.txt")"
-    ls="$(cat "$path/ls_colourize.txt")"
-    dir="$(cat "$path/dir_colourize.txt")"
-    vdir="$(cat "$path/vdir_colourize.txt")"
-    grep="$(cat "$path/grep_colourize.txt")"
-    egrep="$(cat "$path/egrep_colourize.txt")"
-    fgrep="$(cat "$path/fgrep_colourize.txt")"
-
-    # Transfer existing settings to temporary file
-    
-
-    # Use preset checks from temporary files if they exist
-    if [ -f "$COLOURIZE" ]; then
-        # Prompt
-        if [ ! -z "$(grep 'Shell Prompt' "$COLOURIZE")" ]; then prompt_check="ON"; else prompt_check="OFF"; fi
-        # ls
-        if [ ! -z "$(grep 'alias ls' "$COLOURIZE")" ]; then ls_check="ON"; else ls_check="OFF"; fi
-        # dir
-        if [ ! -z "$(grep 'alias dir' "$COLOURIZE")" ]; then dir_check="ON"; else dir_check="OFF"; fi
-        # vdir
-        if [ ! -z "$(grep 'alias vdir' "$COLOURIZE")" ]; then vdir_check="ON"; else vdir_check="OFF"; fi
-        # grep
-        if [ ! -z "$(grep 'alias grep' "$COLOURIZE")" ]; then grep_check="ON"; else grep_check="OFF"; fi
-        # egrep
-        if [ ! -z "$(grep 'alias egrep' "$COLOURIZE")" ]; then egrep_check="ON"; else egrep_check="OFF"; fi
-        # fgrep
-        if [ ! -z "$(grep 'alias fgrep' "$COLOURIZE")" ]; then fgrep_check="ON"; else fgrep_check="OFF"; fi
-    else
-        # Prompt
-        if [ ! -z "$(grep 'Shell Prompt' "$BASHRC")" ]; then prompt_check="ON"; else prompt_check="OFF"; fi
-        # ls
-        if [ ! -z "$(grep 'alias ls' "$BASHRC")" ]; then ls_check="ON"; else ls_check="OFF"; fi
-        # dir
-        if [ ! -z "$(grep 'alias dir' "$BASHRC")" ]; then dir_check="ON"; else dir_check="OFF"; fi
-        # vdir
-        if [ ! -z "$(grep 'alias vdir' "$BASHRC")" ]; then vdir_check="ON"; else vdir_check="OFF"; fi
-        # grep
-        if [ ! -z "$(grep 'alias grep' "$BASHRC")" ]; then grep_check="ON"; else grep_check="OFF"; fi
-        # egrep
-        if [ ! -z "$(grep 'alias egrep' "$BASHRC")" ]; then egrep_check="ON"; else egrep_check="OFF"; fi
-        # fgrep
-        if [ ! -z "$(grep 'alias fgrep' "$BASHRC")" ]; then fgrep_check="ON"; else fgrep_check="OFF"; fi
-    fi
-
-    COLOURIZE_OPTIONS="$(whiptail --title "PATH" --checklist --separate-output "Select commands to colourize" 10 78 5 \
-    "Colourize Prompt" "Colourful shell prompt" $prompt_check \
-    "ls" "List directory contents" $ls_check \
-    "dir" "List directory contents" $dir_check \
-    "vdir" "List directory contents" $vdir_check \
-    "grep" "Print lines that match patterns" $grep_check \
-    "egrep" "Print lines that match patterns" $egrep_check \
-    "fgrep" "Print lines that match patterns" $fgrep_check \
-    3>&1 1>&2 2>&3)"
-
-    # Returns to bash menu if cancelled
-    exitstatus=$?
-    if [ $exitstatus = 1 ]; then bash_setup; fi
-    
-    # Wipe the old tmp file
-    if [ -f "$COLOURIZE" ]; then rm "$COLOURIZE"; fi
-
-
-    mapfile -t colourize_options <<< "$COLOURIZE_OPTIONS"
-
-    for option in "${colourize_options[@]}"; do
-        case "$option" in
-            "Colourize Prompt")
-                printf "$prompt\n\n" >> "$COLOURIZE"
-                ;;
-            "ls")
-                printf "$ls\n" >> "$COLOURIZE"
-                ;;
-            "dir")
-                printf "$dir\n" >> "$COLOURIZE"
-                ;;
-            "vdir")
-                printf "$vdir\n" >> "$COLOURIZE"
-                ;;
-            "grep")
-                printf "$grep\n" >> "$COLOURIZE"
-                ;;
-            "egrep")
-                printf "$egrep\n" >> "$COLOURIZE"
-                ;;
-            "fgrep")
-                printf "$fgrep\n" >> "$COLOURIZE"
-                ;;
-        esac
-    done
-
-    bash_setup
-}
-
-path () {
-    path="$SCRIPT_PATH/bash/paths"    # Path to autocompletions
-    scripts="$(cat "$path/scripts_path.txt")"
-
-    # Use preset checks from temporary files if they exist
-    if [ -f "$PATHS" ]; then
-        # Scripts
-        if [ ! -z "$(grep 'Custom scripts or commands' "$PATHS")" ]; then scripts_check="ON"; else scripts_check="OFF"; fi
-    fi
-
-    PATHS_OPTIONS="$(whiptail --title "PATH" --checklist --separate-output "Select PATHs to include" 10 78 5 \
-    "Scripts" "Include ~/Scripts to add custom scripts" "$scripts_check" \
-    3>&1 1>&2 2>&3)"
-
-    # Returns to bash menu if cancelled
-    exitstatus=$?
-    if [ $exitstatus = 1 ]; then bash_setup; fi
-    
-    # Wipe the old tmp file
-    if [ -f "$PATHS" ]; then rm "$PATHS"; fi
-
-    mapfile -t paths_options <<< "$PATHS_OPTIONS"
-
-    for option in "${paths_options[@]}"; do
-        case "$option" in
-            "Scripts")
-                printf "$scripts\n\n" >> "$PATHS"
-        esac
-    done
-
-    bash_setup
-}
-
-hist () {
-    OPTIONS="$(whiptail --title "PATH" --checklist --separate-output "Select PATHs to include" 10 78 5 \
-    "History- Ignore" "Ignores duplicate lines and lines starting with space" OFF \
-    "History- Append" "Append to the history file, don't overwrite it" OFF \
-    3>&1 1>&2 2>&3)"
-
-    bash_setup
-}
-
-misc () {
-    OPTIONS="$(whiptail --title "Autocompletions" --checklist --separate-output "Enable Miscellaneous Options" 10 78 5 \
-    "Bash Aliases" "Source .bash_aliases for custom aliases" OFF \
-    3>&1 1>&2 2>&3)"
-
-    bash_setup
-}
-
-print_boilerplate() {
+function append_boilerplate() {
     ### Prints boilerplate code that always is included in bashrc
-
-    # Autogenerated notification
-    printf '# This file is generated with %s\n\n' "$0" >> "$BASHRC"
-
-    # Do nothing if the shell or subshell is not run interactively, like activated through a script.
-    printf '# If not running interactively, don'\''t do anything\n [[ $- != *i* ]] && return\n\n' >> "$BASHRC"
+    cat "./templates/bashrc_templates.txt" >> "$BASHRC"
 }
 
-override_bashrc() {
+function override_bashrc() {
     # TODO - Add confirmation on changes
     
     # Do nothing if no changes were made
@@ -343,13 +267,13 @@ override_bashrc() {
     #    fi
     #fi
 
-    rm "$BASHRC"
+    # rm "$BASHRC"
+# 
+    #append_boilerplate
 
-    print_boilerplate
-
-    if [ -f "$AUTOCOMPLETIONS" ]; then
-        cat "$AUTOCOMPLETIONS" >> "$BASHRC"
-    fi
+    #if [ -f "$AUTOCOMPLETIONS" ]; then
+    #    cat "$AUTOCOMPLETIONS" >> "$BASHRC"
+    #fi
 
     #if [ -f "$COLOURIZE" ]; then
     #    echo "# Colourize commands" >> "$BASHRC"
