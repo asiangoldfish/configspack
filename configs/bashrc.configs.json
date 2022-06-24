@@ -16,7 +16,7 @@
           "description": "Version control system",
           "search": "Git autocompletion",
           "snippet": "## Git autocompletion\nif command -v git &>/dev/null; then\n\tif [ -f \"/usr/share/git/completion/git-completion.bash\" ]; then\n\t\tsource \"/usr/share/git/completion/git-completion.bash\"\n\telif [ -f \"/usr/share/bash-completion/completions/git\" ]; then\n\t\tsource \"/usr/share/bash-completion/completions/git\"\n\tfi\nfi",
-          "checkbox": "OFF"
+          "checkbox": "ON"
         },
         "dotnet": {
           "description": "Microsoft .NET CLI",
@@ -73,7 +73,7 @@
         "bash_aliases": {
           "description": "",
           "search": "# Alias definitions",
-          "snippet": "# Alias definitions.\n# You may want to put all your additions into a separate file like\n# ~/.bash_aliases, instead of adding them here directly.\n# See /usr/share/doc/bash-doc/examples in the bash-doc package.\n\nif [ -f ~/.bash_aliases ]; then\n\t~/.bash_aliases\nfi",
+          "snippet": "# Alias definitions.\n# You may want to put all your additions into a separate file like\n# ~/.bash_aliases, instead of adding them here directly.\n# See /usr/share/doc/bash-doc/examples in the bash-doc package.\nif [ -f ~/.bash_aliases ]; then\n\t~/.bash_aliases\nfi",
           "checkbox": "ON"
         }
       }
