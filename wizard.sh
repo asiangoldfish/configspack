@@ -5,8 +5,6 @@ DEPS=( "jq" )
 
 SCRIPT_PATH="$(dirname "$0")"
 TMP="$SCRIPT_PATH/tmp"
-NANORC="./hello.sh"
-BASHRC="./bashrc"
 
 CONFIGS_DIR="$SCRIPT_PATH/configs"
 CONFIG_FILES=()  # List of all available config files
@@ -90,21 +88,31 @@ function main () {
                         "${menu_entries[@]}" \
                         3>&1 1>&2 2>&3 )"
 
-    # Open the selected menu
-    #bash_main "$MENU"
-    bash_setup "dotfile=$MENU"
-
     exitstatus="$?"
-    if [ "$exitstatus" = 0 ]; then
-        exit
-    fi
+
+    if [ "$exitstatus" = 1 ]; then cleanup; exit; fi
+
+    # Open the selected menu
+    bash_setup "dotfile=$MENU"
 }
 
 cleanup () {
-    if [ -d $TMP ]; then
+    if [ -d "$TMP" ]; then
         rm -r "$TMP"
     fi
 }
 
+function foobar () {
+    MENU="$(whiptail    --title "Configure Application" \
+                        --menu "Select application to configure" \
+                        10 70 3 \
+                        "Hello" "world" \
+                        3>&1 1>&2 2>&3 )"
+
+    exitstatus="$?"
+
+    if [ "$exitstatus" = 1 ]; then exit; fi
+} 
+
 main
-dependency_check
+#dependency_check

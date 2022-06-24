@@ -96,10 +96,19 @@ function bash_setup () {
                             3>&1 1>&2 2>&3 )"
     # Prompt the user to override bashrc with the new changes
     exitstatus=$?
-    if [[ $exitstatus = 1 ]]; then override_bashrc; fi
+    if [[ $exitstatus = 1 ]]; then
+        override_bashrc     "dotfile_no_dot=${dotfile_no_dot[1]}" \
+                            "config=$CONFIGS" \
+                            "dotfile_path=$dotfile"
+    fi
 
     # Direct user to the selected menu
-    completions "category=${menu,}" "config=$CONFIGS" "config_no_path=${dotfile_no_dot[1]}.configs.json"
+    completions "category=${menu,}" \
+                "config=$CONFIGS" \
+                "config_no_path=${dotfile_no_dot[1]}.configs.json" \
+                "dotfile=$dotfile"
+    
+    unset dotfile_no_dot
 }
 
 # TODO - Remove this function?
@@ -134,6 +143,7 @@ function generate_tmp() {
     return 0
 }
 
+# TODO - Remove this function?
 function bashrc_to_tmp () {
     ### Copies all settings from bashrc into temporary files.
     ### Each JSON config first depth key is considered a category.
@@ -221,6 +231,7 @@ function completions () {
             "category") local category="${argv[1]}";;
             "config") local config="${argv[1]}";;
             "config_no_path") local config_no_path="${argv[1]}";;
+            "dotfile") local dotfile="${argv[1]}";;
         esac
         shift
     done
@@ -262,7 +273,8 @@ function completions () {
     # Returns to bash menu if cancelled
     # TODO - Change this back to returning bash_setup when finished
     exitstatus=$?
-    if [ $exitstatus = 1 ]; then  exit; fi #bash_setup; fi
+    if [ $exitstatus = 1 ]; then exit; fi #bash_setup; fi
+    #bash_setup "dotfile=$dotfile"
 
     local menu_options
     mapfile -t menu_options <<< "$menu"
@@ -290,9 +302,6 @@ function completions () {
         [[ -n $skip ]] || offs+=( "$i" )
     done
 
-    echo "ONs: " "${ons[@]}"
-    echo "OFFs: " "${offs[@]}"
-
     local tmp_file="$TMP/$config_no_path"
 
     # Overwrite entries for ONs
@@ -305,52 +314,68 @@ function completions () {
         cat "$config" | jq -r '.categories.'"$category"'.subCategory.'"$off"'.checkbox = "OFF"' > "$tmp_file" && mv "$tmp_file" "$config"
     done
 
-    unset ons offs tmp_file
+    unset ons offs tmp_file argv
 
     # TODO - Go back to previous page with all the correct arguments
-    #bash_setup
-}
-
-function append_boilerplate() {
-    ### Prints boilerplate code that always is included in bashrc
-    cat "./templates/bashrc_templates.txt" >> "$BASHRC"
+    bash_setup "dotfile=$dotfile"
+    unset dotfile
 }
 
 function override_bashrc() {
-    # TODO - Add confirmation on changes
+    ### Based on the checkboxes in JSON config, generate a new dotfile
+    ###
+    ### Arguments:
+    ###     - config [string]: JSON config file to pull from
+    ###     - dotfile_path [string]: Path to dotfile to apply changes to
+    ###     - dotfile_no_dot [string]: Dotfile name without the dot
+
+    # Map args to variables
+    local argv
+    for arg in "$@"; do
+        IFS="=" read -ra argv <<< "$arg"
+        case "${argv[0]}" in
+            "config") local config="${argv[1]}";;
+            "dotfile_path") local dotfile_path="${argv[1]}";;
+            "dotfile_no_dot") local dotfile_no_dot="${argv[1]}";;
+        esac
+        shift
+    done
     
-    # Do nothing if no changes were made
-    #if [ -f "$AUTOCOMPLETE" || -f "$COLOURIZE" || -f "$PATHS" ]; then
-    #    # Confirm changes
-    #    if (whiptail --title "Confirm Changes" --yesno "Override and save new changes to bashrc?" 10 78); then
-    #            :
-    #        else
-    #            cleanup
-    #            main
-    #    fi
-    #fi
+    # Generate new dotfile with boilerplate code if available
+    if [ -f "$dotfile_path" ]; then
+        rm "$dotfile_path";
+        touch "$dotfile_path"
+    fi
 
-    # rm "$BASHRC"
-# 
-    #append_boilerplate
+    local templates="$SCRIPT_PATH/templates/$dotfile_no_dot.templates.txt"
+    if [ -f "$templates" ]; then 
+        cat "$templates" > "$dotfile_path"
+        echo "" >> "$dotfile_path"
 
-    #if [ -f "$AUTOCOMPLETIONS" ]; then
-    #    cat "$AUTOCOMPLETIONS" >> "$BASHRC"
-    #fi
+    fi
 
-    #if [ -f "$COLOURIZE" ]; then
-    #    echo "# Colourize commands" >> "$BASHRC"
-    #    cat "$COLOURIZE" >> "$BASHRC"
-    #fi
+    # Iterate over all categories, then for each of the subcategories
+    # copy the snippets to the dotfile if its checkbox is ON
+    local categories
+    mapfile -t categories <<< "$(cat "$config" | jq -r ".categories | keys[]")"
+    
+    for cat in "${categories[@]}"; do
+        local subcategories
+        mapfile -t subcategories <<< "$(cat "$config" | jq -r ".categories.$cat.subCategory | keys[]")"
 
-    #if [ -f "$PATHS" ]; then
-    #    echo "" >> "$BASHRC"
-    #    echo "# PATHs" >> "$BASHRC"
-    #    cat "$PATHS" >> "$BASHRC"
-    #fi
+        for subcat in "${subcategories[@]}"; do
+            # Finally, copy snippets to dotfile if checkbox is ON
+            checkbox="$(cat $config | jq -r ".categories.$cat.subCategory.$subcat.checkbox")"
 
-    # Cleanup
-    cleanup
+            if [[ "$checkbox" = "ON" ]]; then
+                cat "$config" | jq -r ".categories.$cat.subCategory.$subcat.snippet" >> "$dotfile"
+                echo "" >> "$dotfile"
+            fi
+        done
+        unset subcategories
+    done
+
+    unset categories
 
     # Back to main menu
     main
