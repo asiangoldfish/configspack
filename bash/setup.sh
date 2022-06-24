@@ -1,12 +1,5 @@
 # shellcheck shell=bash
 
-CONFIGS="$SCRIPT_PATH/configs/bashrc_configs.json"
-
-# Maps each categories' settings to their designated tmp file
-mapfile -t CATEGORIES <<< "$(cat "$CONFIGS" | jq -r '.categories | keys[]')"
-
-TMP_FILES=()
-
 function throw_error
 {
     ### Throws an error for debugging purposes
@@ -46,29 +39,56 @@ function get_subcategories() {
     if [ "$raw" = "" ]; then throw_error "${FUNCNAME} is missing named argument 'raw'"; fi
 
     local subcategories
-    mapfile -t subcategories <<< "$(cat "$CONFIGS" | jq -r ".categories.$category.subCategory | keys[]")"
+    if [ "$raw" = False ]; then
+        mapfile -t subcategories <<< "$(cat "$CONFIGS" | jq ".categories.$category.subCategory | keys[]")"
+    else
+        mapfile -t subcategories <<< "$(cat "$CONFIGS" | jq -r ".categories.$category.subCategory | keys[]")"
+    fi
 
     # Return statement
     echo "${subcategories[@]}"
 }
 
 function bash_setup () {
-    # Create a new bashrc if it doesn't already exists
-    if [ ! -f "$BASHRC" ]; then touch "$BASHRC"; fi
+    ### Main entry to the dotfile's configuration menu
+    ###
+    ### Arguments:
+    ###     - dotfile [string]: Name of dotfile
+    
+    # Maps arguments to variables
+    local argv
+    for arg in "$@"; do
+        IFS="=" read -ra argv <<< "$arg"
+        case "${argv[0]}" in
+            "dotfile") local dotfile="${argv[1]}";;
+        esac
+        shift
+    done
+    
+    # Fetches the config file for this dotfile
+    local dotfile_no_dot
+    IFS="." read -ra dotfile_no_dot <<< "$dotfile"
+    local CONFIGS="$CONFIGS_DIR/${dotfile_no_dot[1]}.configs.json"
+
+    # Create a new dotfile if it doesn't already exists
+    if [ ! -f "$dotfile" ]; then touch "$dotfile"; fi
+
+    # Maps all categories
+    local CATEGORIES
+    mapfile -t CATEGORIES <<< "$(cat "$CONFIGS" | jq -r '.categories | keys[]')"
 
     # Creates a new menu based on the categories array and JSON config
-    new_menu=()
-
+    local new_menu=()
     for category in "${CATEGORIES[@]}"; do
         # Sub menu description
         description="$(cat $CONFIGS | jq -r ".categories.$category.menuDescription")"
-
         new_menu+=( "${category^}" )
         new_menu+=( "$description" )
     done
 
     # Bashrc Main Menu
-    BASH_MENU="$(whiptail   --title "Configure Application" \
+    local menu
+    menu="$(whiptail   --title "Configure Application" \
                             --menu "Select application to configure" \
                             --ok-button "Select" \
                             --cancel-button "Back" 10 78 3 \
@@ -79,21 +99,10 @@ function bash_setup () {
     if [[ $exitstatus = 1 ]]; then override_bashrc; fi
 
     # Direct user to the selected menu
-    mapfile -t bash_options <<< "$BASH_MENU"
-
-    # Iterator for getting iterated element in aray
-    i=0
-    for option in "${bash_options[@]}"; do
-        for category in "${CATEGORIES[@]}"; do
-            if [ "${option,}" == "$category" ]; then
-            completions "${category,}" "${TMP_FILES[$i]}"
-            break
-            fi
-        done
-        i+=1
-    done
+    completions "category=${menu,}" "config=$CONFIGS" "config_no_path=${dotfile_no_dot[1]}.configs.json"
 }
 
+# TODO - Remove this function?
 function generate_tmp() {
     ### Generates a new temporary file
     ### The file name has the format xxx.yyy.tmp where x is the dotfile
@@ -185,67 +194,121 @@ function apply_checks () {
     if [ ! -z "$(grep "$search" "$target")" ]; then return "ON"; else return "OFF"; fi
 }
 
+mkdir_tmp() {
+    if [ ! -d "$TMP" ]; then mkdir "$TMP"; fi
+
+    return 0
+}
+
 function completions () {
     ### Handles autocompletion related settings
     ###
     ### - Creates a checkbox menu to enable users picking their features of choice.
     ### - Fetches existing settings and updates the checkboxes accordingly
-    ### - Generates a temporary file storing selected features
+    ### - Updates the checkbox field in the JSON config
+    ###
+    ### Arguments:
+    ###     - category [string]: Show the menu of this category
+    ###     - config [string]: Configuration file path
+    ###     - config_no_path [string]: Configuration file name
+    ###
 
-    # This variable stores ON's and OFF's for each setting. Makes the selecion more dynamic.
-    local completion_options_array=()
-    local category="$1"
-    local tmp_file="$2"
-
-    # Dynamically fetches all features to add from JSON config
-    mapfile -t features <<< "$(cat "$CONFIGS" | jq -r ".categories.autocompletion.subCategory | keys[]")"
-
-    # Get all names, search strings and ON/OFF statements and add them all to an array. Then, use the array in the whiptail checklist.
-    for feature in "${features[@]}"; do
-        # Fetches the search keyword from the JSON config
-        #search_phrase="$(cat "$CONFIGS" | jq ".categories.$category.subCategory.$feature.search")"
-
-	    search_phrase="$(cat "$CONFIGS"  | jq ".categories.$category.subCategory.$feature.search")"
-
-        # Add the variables to the dynamic array
-        completion_options_array+=( "$feature" "$search_phrase" )
-
-        # If there already is a tmp file, then use settings from it instead of bashrc
-        if grep -q "$search_phrase" "$tmp_file"; then completion_options_array+=( "OFF" ); echo "OFF"; else completion_options_array+=( "ON" ); echo "ON"; fi
+    
+    local argv
+    for arg in "$@"; do
+        IFS="=" read -ra argv <<< "$arg"
+        case "${argv[0]}" in
+            "category") local category="${argv[1]}";;
+            "config") local config="${argv[1]}";;
+            "config_no_path") local config_no_path="${argv[1]}";;
+        esac
+        shift
     done
 
-    exit
+    # Gets all subcategories in the menu
+    local subcategories
+    IFS=" " read -ra subcategories <<< "$(get_subcategories category="$category" raw=True)"
+
+    # Generate menu entries
+    # TODO - Fix the ON/OFF switch to dynamically match what's in the dotfile and keep the change until the user goes back to main menu
+    local menu_entry
+    local i=0
+    for subcat in "${subcategories[@]}"; do
+        # Description of this entry
+        local description
+        description="$(cat "$config" | jq -r ".categories.$category.subCategory.$subcat.description")"
+
+        # Whether the checkbox should be ON or OFF
+        local checkbox
+        checkbox="$(cat "$config" | jq -r ".categories.$category.subCategory.$subcat.checkbox")"
+
+        menu_entry+=( "$subcat" "$description" "$checkbox" )
+        i+=1
+    done
+    
+    unset i
 
     # Build the checklist menu
-    COMPLETION_OPTIONS="$(whiptail  --title "${category^}" \
+    local menu
+    menu="$(whiptail  --title "${category^}" \
                                     --checklist \
                                     --separate-output "Select applications" \
                                     --ok-button "Select" \
                                     --cancel-button "Back" \
                                     10 78 5 \
-                                    "${completion_options_array[@]}" \
+                                    "${menu_entry[@]}" \
                                     3>&1 1>&2 2>&3)"
 
     # Returns to bash menu if cancelled
+    # TODO - Change this back to returning bash_setup when finished
     exitstatus=$?
-    if [ $exitstatus = 1 ]; then bash_setup; fi
+    if [ $exitstatus = 1 ]; then  exit; fi #bash_setup; fi
 
-    # Wipe the old tmp file
-    if [ -f "$tmp_file" ]; then rm "$tmp_file"; fi
+    local menu_options
+    mapfile -t menu_options <<< "$menu"
 
-    mapfile -t completion_options <<< "$COMPLETION_OPTIONS"
+    # Updates new checkboxes and overwrites them in JSON config
+    mkdir_tmp
 
-    # Iterator for getting iterated element in aray
-    for option in "${completion_options[@]}"; do
-        for feature in "${features[@]}"; do
-            if [ "$option" == "$feature" ]; then
-                cat "$CONFIGS" | jq .categories."$0".subCategory."$feature".snippet >> "$tmp_file"
-                printf "\n\n" >> "$tmp_file"
-            fi
+    # Sort ON entries
+    local ons
+    local offs
+
+    for subcat in "${subcategories[@]}"; do
+        for option in "${menu_options[@]}"; do
+            # If subcat matches option, then consider subcat as ON, otherwise OFF
+            if [[ "$subcat" = "$option" ]]; then ons+=("$option"); fi
         done
     done
 
-    bash_setup
+    # Sort OFF entries
+    for i in "${subcategories[@]}"; do
+        skip=
+        for j in "${menu_options[@]}"; do
+            [[ $i == "$j" ]] && { skip=1; break; }
+        done
+        [[ -n $skip ]] || offs+=( "$i" )
+    done
+
+    echo "ONs: " "${ons[@]}"
+    echo "OFFs: " "${offs[@]}"
+
+    local tmp_file="$TMP/$config_no_path"
+
+    # Overwrite entries for ONs
+    for on in "${ons[@]}"; do
+        cat "$config" | jq -r '.categories.'"$category"'.subCategory.'"$on"'.checkbox = "ON"' > "$tmp_file" && mv "$tmp_file" "$config"
+    done
+
+    # Overwrite entries for OFFs
+    for off in "${offs[@]}"; do
+        cat "$config" | jq -r '.categories.'"$category"'.subCategory.'"$off"'.checkbox = "OFF"' > "$tmp_file" && mv "$tmp_file" "$config"
+    done
+
+    unset ons offs tmp_file
+
+    # TODO - Go back to previous page with all the correct arguments
+    #bash_setup
 }
 
 function append_boilerplate() {
