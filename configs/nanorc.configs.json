@@ -1,5 +1,18 @@
 {
     "app": "Nano",
     "dotfile": ".nanorc",
-    "description": "Nano"
+    "description": "Nano",
+    "categories": {
+        "autocompletion": {
+            "menuDescription": "Tab complete commands",
+            "subCategory": {
+                "sudo": {
+                    "description": "Execute super user commands",
+                    "search": "Sudo autocompletion",
+                    "snippet": "## Sudo autocompletion\nif [ -f \"/usr/share/bash-completion/bash_completion\" ]; then\n\tif command -v sudo &> /dev/null; then complete -cf sudo; fi\nfi",
+                    "checkbox": "OFF"
+                }
+            }
+        }
+    }
 }
