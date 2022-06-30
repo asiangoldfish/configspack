@@ -1,18 +1,47 @@
 {
-    "app": "Nano",
-    "dotfile": ".nanorc",
-    "description": "Nano",
-    "categories": {
-        "autocompletion": {
-            "menuDescription": "Tab complete commands",
-            "subCategory": {
-                "sudo": {
-                    "description": "Execute super user commands",
-                    "search": "Sudo autocompletion",
-                    "snippet": "## Sudo autocompletion\nif [ -f \"/usr/share/bash-completion/bash_completion\" ]; then\n\tif command -v sudo &> /dev/null; then complete -cf sudo; fi\nfi",
-                    "checkbox": "OFF"
-                }
-            }
+  "app": "Nano",
+  "dotfile": "/home/khai/.nanorc",
+  "description": "Nano",
+  "categories": {
+    "visuals": {
+      "menuDescription": "Costmetic effects",
+      "subCategory": {
+        "lineNumbers": {
+          "description": "Display line numbers",
+          "snippet": "# Display line numbers\nset linenumbers",
+          "checkbox": "ON"
         }
+      }
+    },
+    "textEditing": {
+      "menuDescription": "Customize text editing behaviour",
+      "subCategory": {
+        "noNewLines": {
+          "description": "Don't automatically add newline at EOL",
+          "snippet": "# Don't automatically add newline at end of file\nset nonewlines",
+          "checkbox": "ON"
+        },
+        "softwrap": {
+          "description": "Softwrap text outside terminal border",
+          "snippet": "# Softwrap text outside terminal border",
+          "checkbox": "ON"
+        },
+        "tabsize4": {
+          "description": "Sets tabsize to 4 spaces",
+          "snippet": "# Sets tabsize to 4 spaces\nset tabsize 4",
+          "checkbox": "ON"
+        }
+      }
+    },
+    "syntaxHighlights": {
+      "menuDescription": "Apply syntax definitions",
+      "subCategory": {
+        "syntaxDefinitions": {
+          "description": "Syntax highlighting",
+          "snippet": "# Include syntax definitions\ninclude \"~/.nano/*.nanorc\"",
+          "checkbox": "ON"
+        }
+      }
     }
+  }
 }
