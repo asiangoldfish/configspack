@@ -17,8 +17,8 @@ source "$SCRIPT_PATH/bash/setup.sh"
 source "$SCRIPT_PATH/bash/manage_configs.sh"
 
 function get_configs () {
-    ### Gets all supported dotfiles based on the configuration files available
-    ### The format should be as follows: dotfile.configs.json
+    ### Description:    Gets all supported dotfiles based on the configuration files available
+    ###                 The format should be as follows: dotfile.configs.json
 
     # List all elements in the configs directory
     for entry in "./configs"/*; do
@@ -30,6 +30,8 @@ function get_configs () {
 }
 
 function dependency_check () {
+    ### Description:    Ensures that all dependencies are present
+
     local missing_dependencies
 
     for dep in "${DEPS[@]}"; do
@@ -41,13 +43,14 @@ function dependency_check () {
 }
 
 function usage () {
-    printf """%s, version %s
+    cat << EOF
+$NAME, version $VERSION
 Usage:  wizard.sh
         wizard.sh [option]
 options:
         --edit-configs      add, remove, edit configurations and entries
         --help              this page
-""" "$NAME" "$VERSION"
+EOF
 }
 
 function edit_configs () {
