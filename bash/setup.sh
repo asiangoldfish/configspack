@@ -111,105 +111,6 @@ function bash_setup () {
     unset dotfile_no_dot
 }
 
-# TODO - Remove this function?
-function generate_tmp() {
-    ### Generates a new temporary file
-    ### The file name has the format xxx.yyy.tmp where x is the dotfile
-    ### name and y is the subcategory name.
-    ###
-    ### Arguments:
-    ###     - $1 [string]: Target directory to store the file
-    ###     - $2 [string]: Dotfile name
-    ###     - $3 [string]: Subcategory name
-    ###     - $4 [bool]: Replace old file?
-
-    # Throw an error if there are missing arguments
-    if [ "$1" = "" ]; then throw_error "Missing positional argument target directory"; fi
-    if [ "$2" = "" ]; then throw_error "Missing positional argument dotfile name"; fi
-    if [ "$3" = "" ]; then throw_error "Missing positional argument subcategory directory"; fi
-    
-    # Map args to variables
-    target="$1"; dotfile="$2"; subcategory="$3"; replace="$4"
-
-    # The tmp file name
-    local tmp_file="$dotfile.$subcategory.tmp"
-
-    # Remove the old tmp file
-    if [ "$replace" = True ] && [ -f "$target/$tmp_file" ]; then rm "$target/$tmp_file"; fi
-
-    # Create new tmp file if one doesn't already exist
-    if [ ! -f "$target/$tmp_file" ]; then touch "$target/$tmp_file"; fi
-
-    return 0
-}
-
-# TODO - Remove this function?
-function bashrc_to_tmp () {
-    ### Copies all settings from bashrc into temporary files.
-    ### Each JSON config first depth key is considered a category.
-    ### Each category receives its own temporary file. Ex: bash_category.tmp
-    ### Settings from bashrc is copied to the appropriate temporary file.
-    for category in "${CATEGORIES[@]}"; do
-
-        # Temporary file to store settings in
-        tmp_file="$TMP/bashrc_$category.tmp"
-        if [ ! -d "$TMP" ]; then mkdir "$TMP"; fi
-
-        # Append the file to the global array variable of temporary files
-        TMP_FILES+=( "$tmp_file" )
-
-        local subs
-        mapfile -t subs <<< "$(get_subcategories category="$category" raw=True )"
-
-        echo "${subs[@]}"
-        exit
-
-        # Map all setting of a given category in an array
-        mapfile -t apps <<< "$(cat "$CONFIGS" | jq ".categories.$category.subCategory | keys[]")"
-
-        # Find "search" strings for each setting based on json config file
-        for app in "${apps[@]}"; do
-            local search_phrase
-            search_phrase="$(cat "$CONFIGS" | jq -r ".categories.$category.subCategory.$app.search")"
-
-            # Copy settings from bashrc to tmp file
-            if [ ! -z "$(grep "$search_phrase" "$BASHRC")" ]; then
-                # If search phrase was found in bashrc, copy the given setting to tmp file
-                cat "$CONFIGS" | jq -r ".categories.$category.subCategory.$app.snippet" >> "$tmp_file"
-            fi
-        done
-    done
-}
-
-function apply_checks () {
-    ### Validates whether a file contains a given string
-    ### Arguments:
-    ###     - search [string]: Search by this string
-    ###     - target [string]: File to search in
-    ### Returns:
-    ###     - string: "ON" or "OFF" depending on if the string was found
-    ### Notes:
-    ###     - This function uses grep for validation. Anything returned by grep
-    ###       is considered as "valid".
-
-    # Maps arguments to variables
-    for arg in "$@"; do
-        IFS="=" read -ra argv <<< "$arg"
-        case "${argv[0]}" in
-            "search") search="${argv[1]}";;
-            "target") target="${argv[1]}";;
-        esac
-    done
-
-    if [ ! -z "$(grep "$search" "$target")" ]; then return "ON"; else return "OFF"; fi
-}
-
-mkdir_tmp() {
-    if [ ! -d "$TMP" ]; then mkdir "$TMP"; fi
-
-    return 0
-}
-
 function completions () {
     ### Handles autocompletion related settings
     ###
@@ -280,7 +181,8 @@ function completions () {
     mapfile -t menu_options <<< "$menu"
 
     # Updates new checkboxes and overwrites them in JSON config
-    mkdir_tmp
+    if [ ! -d "$TMP" ]; then mkdir "$TMP"; fi
+
 
     # Sort ON entries
     local ons
