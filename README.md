@@ -9,6 +9,67 @@ Configspack is a post-installation script for UNIX-like systems and is written p
 - [Customizations](#customizations)
 
 ## Getting Started
+Install dependencies:
+
+<table>
+<!-- Table headers -->
+<tr>
+<td> Distribution </td> <td> Commands </td>
+</tr>
+
+<!-- First row -->
+<tr>
+<td> Debian </td>
+<td>
+
+```sh
+apt-get install jq
+```
+
+</td>
+</tr>
+
+<!-- Second row -->
+<tr>
+<td> Arch-Linux </td>
+<td>
+
+```sh
+pacman -S jq
+```
+
+</td>
+</tr>
+
+<!-- Third row- -->
+<tr>
+<td> Fedora </td>
+<td>
+
+```sh
+dnf install jq
+```
+
+</td>
+</tr>
+
+<!-- Fourth row- -->
+<tr>
+<td> RHEL/CentOS </td>
+<td>
+
+```sh
+yum install epel-release -y
+yum update -y
+yum install jq -y
+```
+
+</td>
+</tr>
+</table>
+
+
+
 Before anything, change the file paths of the default configurations.
 ```sh
 cd path/to/configspack
@@ -31,6 +92,8 @@ Then, select the category to configure:
 Finally, check the boxes for each setting to include:
 
 ![Alt Text](img/configspack_selection.png.png "Configspack selection")
+
+Whenever returning back to main menu, Configspack will attempt to save all changes to the appropriate dotfile.
 
 ## Customizations
 ### ***Setup configs.json***
