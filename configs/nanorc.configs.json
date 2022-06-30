@@ -1,6 +1,6 @@
 {
   "app": "Nano",
-  "dotfile": "/home/khai/.nanorc",
+  "dotfile": "/home/USER/.nanorc",
   "description": "Nano",
   "categories": {
     "visuals": {
