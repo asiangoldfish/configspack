@@ -102,10 +102,15 @@ function main () {
 
     # Iterate all config files
     for config in "${CONFIG_FILES[@]}"; do
+        # Gets the filepath from JSON config
         local dotfile
         dotfile="$(cat $config | jq -r '.dotfile')"
+
+        # Gets the dotfile description to display in the main menu
         local description
-        description="$(cat $config | jq -r '.description')"
+        description="$(cat "$config" | jq -r '.description')"
+
+        # Assemble the main menu entries
         menu_entries+=( "$dotfile" )
         menu_entries+=( "         $description" )
     done
@@ -117,11 +122,10 @@ function main () {
                         3>&1 1>&2 2>&3 )"
 
     exitstatus="$?"
-
     if [ "$exitstatus" = 1 ]; then cleanup; exit; fi
 
     # Open the selected menu
-    bash_setup "dotfile=$MENU"
+    bash_setup "dotfile=$HOME/$MENU"
 }
 
 cleanup () {
