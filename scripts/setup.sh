@@ -1,20 +1,3 @@
-# shellcheck shell=bash
-
-function throw_error
-{
-    ### Throws an error for debugging purposes
-    ### Arguments:
-    ###     - $1: Error message
-
-    # TODO - At the moment the below lines only returns the line number of caller
-    #        and not where the actual error is. Fix this so the error message
-    #        displays where the error actually is in line numbers.
-
-    printf '%s' "$(caller): "
-    printf '%s\n' "${1:-"Unknown error"}" 1>&2
-    exit 111
-}
-
 function get_subcategories() {
     ### Returns the subcategories in a menu
     ### Arguments:
@@ -35,9 +18,6 @@ function get_subcategories() {
         shift
     done
     
-    if [ "$category" = "" ]; then throw_error "${FUNCNAME} is missing named argument 'category'"; fi
-    if [ "$raw" = "" ]; then throw_error "${FUNCNAME} is missing named argument 'raw'"; fi
-
     local subcategories
     if [ "$raw" = False ]; then
         mapfile -t subcategories <<< "$(cat "$CONFIGS" | jq ".categories.$category.subCategory | keys[]")"
@@ -55,15 +35,7 @@ function bash_setup () {
     ### Arguments:
     ###     - dotfile [string]: Name of dotfile
     
-    # Maps arguments to variables
-    local argv
-    for arg in "$@"; do
-        IFS="=" read -ra argv <<< "$arg"
-        case "${argv[0]}" in
-            "dotfile") local dotfile="${argv[1]}";;
-        esac
-        shift
-    done
+    local dotfile="$1"
     
     # Fetches the config file for this dotfile
     local dotfile_no_dot
@@ -172,10 +144,8 @@ function completions () {
                                     3>&1 1>&2 2>&3)"
 
     # Returns to bash menu if cancelled
-    # TODO - Change this back to returning bash_setup when finished
     exitstatus=$?
-    if [ $exitstatus = 1 ]; then exit; fi #bash_setup; fi
-    #bash_setup "dotfile=$dotfile"
+    [ $exitstatus = 1 ] && bash_setup "$dotfile"
 
     local menu_options
     mapfile -t menu_options <<< "$menu"
@@ -216,11 +186,10 @@ function completions () {
         cat "$config" | jq -r '.categories.'"$category"'.subCategory.'"$off"'.checkbox = "OFF"' > "$tmp_file" && mv "$tmp_file" "$config"
     done
 
-    unset ons offs tmp_file argv
+    unset ons offs tmp_file argv dotfile
 
-    # TODO - Go back to previous page with all the correct arguments
-    bash_setup "dotfile=$dotfile"
-    unset dotfile
+    # Go back to submenu
+    bash_setup "$dotfile"
 }
 
 function override_bashrc() {
@@ -242,7 +211,13 @@ function override_bashrc() {
         esac
         shift
     done
-    
+
+    # Confirm changes
+    whiptail --yesno 'Save changes to dotfile?' 10 78 3
+    local exitstatus="$?"
+    [ "$exitstatus" -eq 1 ] && main
+    unset exitstatus
+
     # Generate new dotfile with boilerplate code if available
     if [ -f "$dotfile_path" ]; then
         rm "$dotfile_path";

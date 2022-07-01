@@ -13,8 +13,8 @@ NAME="configspack"
 VERSION="1.0.0"
 
 # include statements
-source "$SCRIPT_PATH/bash/setup.sh"
-source "$SCRIPT_PATH/bash/manage_configs.sh"
+source "$SCRIPT_PATH/scripts/setup.sh"
+source "$SCRIPT_PATH/scripts/manage_configs.sh"
 
 function get_configs () {
     ### Description:    Gets all supported dotfiles based on the configuration files available
@@ -125,7 +125,7 @@ function main () {
     if [ "$exitstatus" = 1 ]; then cleanup; exit; fi
 
     # Open the selected menu
-    bash_setup "dotfile=$HOME/$MENU"
+    bash_setup "$HOME/$MENU"
 }
 
 cleanup () {
