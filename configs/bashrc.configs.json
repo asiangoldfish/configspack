@@ -63,7 +63,7 @@
       "subCategory": {
         "bash_aliases": {
           "description": "Organize aliases in a seperate .bash_aliases file",
-          "snippet": "# Alias definitions.\n# You may want to put all your additions into a separate file like\n# source ~/.bash_aliases, instead of adding them here directly.\n# See /usr/share/doc/bash-doc/examples in the bash-doc package.\nif [ -f ~/.bash_aliases ]; then\n\t~/.bash_aliases\nfi",
+          "snippet": "# Alias definitions.\n# You may want to put all your additions into a separate file like\n# source ~/.bash_aliases, instead of adding them here directly.\n# See /usr/share/doc/bash-doc/examples in the bash-doc package.\nif [ -f ~/.bash_aliases ]; then\n\tsource ~/.bash_aliases\nfi",
           "checkbox": "ON"
         }
       }
