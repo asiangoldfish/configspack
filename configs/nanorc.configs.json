@@ -1,6 +1,6 @@
 {
   "app": "Nano",
-  "dotfile": "/home/USER/.nanorc",
+  "dotfile": ".nanorc",
   "description": "Nano",
   "categories": {
     "visuals": {

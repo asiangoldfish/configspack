@@ -1,6 +1,6 @@
 {
   "app": "Bash",
-  "dotfile": "/home/USER/.bashrc",
+  "dotfile": ".bashrc",
   "description": "Bash",
   "categories": {
     "autocompletion": {
