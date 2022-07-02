@@ -20,6 +20,11 @@
           "description": "Microsoft .NET CLI",
           "snippet": "## Dotnet autocompletion\nif command -v dotnet &>/dev/null; then\n\t_dotnet_bash_complete() {\n\t\tlocal word=${COMP_WORDS[COMP_CWORD]}\n\t\tlocal completions\n\t\tcompletions=\"$(dotnet complete --position \"${COMP_POINT}\" \"${COMP_LINE}\" 2>/dev/null)\"\n\t\tif [ $? -ne 0 ]; then\n\t\t\tcompletions=\"\"\n\t\tfi\n\t\tCOMPREPLY=(\"$(compgen -W \"$completions\" -- \"$word\")\")\n\t}\n\tcomplete -f -F _dotnet_bash_complete dotnet\nfi",
           "checkbox": "ON"
+        },
+        "npm": {
+          "description": "Node package manager",
+          "snippet": "# Node package manager\nsource <(npm completion)",
+          "checkbox": "ON"
         }
       }
     },
