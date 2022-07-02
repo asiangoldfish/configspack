@@ -186,7 +186,7 @@ function completions () {
         cat "$config" | jq -r '.categories.'"$category"'.subCategory.'"$off"'.checkbox = "OFF"' > "$tmp_file" && mv "$tmp_file" "$config"
     done
 
-    unset ons offs tmp_file argv dotfile
+    unset ons offs tmp_file argv
 
     # Go back to submenu
     bash_setup "$dotfile"
