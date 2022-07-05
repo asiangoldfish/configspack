@@ -1,31 +1,27 @@
 #!/usr/bin/bash
 
-# Check for dependencies
-DEPS=( "jq" )
+# Global variables
+DEPS=( "jq" )                               # Dependencies
 
-SCRIPT_PATH="$(dirname "$0")"
-TMP="/tmp"
+SCRIPT_PATH="$(dirname "$0")"               # This script's root directory
+TMP="/tmp"                                  # Temporary directory path
 
-CONFIGS_DIR="$SCRIPT_PATH/configs"
-CONFIG_FILES=()  # List of all available config files
+CONFIGS_DIR="$SCRIPT_PATH/configs"          # Where all configs are stored at
+CONFIG_FILES=()                             # List of all available config files
 
-NAME="configspack"
-VERSION="1.0.0"
+NAME="configspack"                          # This application's name
+VERSION="1.0.0"                             # Application version number
 
 # include statements
-source "$SCRIPT_PATH/scripts/setup.sh"
-source "$SCRIPT_PATH/scripts/manage_configs.sh"
+source  "$SCRIPT_PATH/scripts/setup.sh" \
+        "$SCRIPT_PATH/scripts/manage_configs.sh"
 
 function get_configs () {
     ### Description:    Gets all supported dotfiles based on the configuration files available
     ###                 The format should be as follows: dotfile.configs.json
 
-    # List all elements in the configs directory
     for entry in "./configs"/*; do
-        # Only consider the dotfile if it is a file
-        if [ ! -f "$entry" ]; then continue; fi
-
-        CONFIG_FILES+=( "$entry" )
+        [ ! -f "$entry" ] && continue || CONFIG_FILES+=( "$entry" )
     done
 }
 
@@ -33,29 +29,25 @@ function dependency_check () {
     ### Description:    Ensures that all dependencies are present
 
     local missing_dependencies
-
-    for dep in "${DEPS[@]}"; do
-        command -v "$dep" &> /dev/null || missing_dependencies+=( "$dep" )
-    done
+    for dep in "${DEPS[@]}"; do command -v "$dep" &> /dev/null || missing_dependencies+=( "$dep" ); done
 
     # Quit if missing dependencies were found
-    if (( ${#missing_dependencies[@]} > 0 )); then echo "Missing dependencies were found:"; echo "${missing_dependencies[@]}"; exit 1; fi
+    (( ${#missing_dependencies[@]} > 0 )) && printf "Missing dependencies were found:\n%s\n" "${missing_dependencies[@]}" && return 1 ||  return 0
 }
 
 function usage () {
     cat << EOF
 $NAME, version $VERSION
 Usage:  wizard.sh
-        wizard.sh [option]
-options:
+        wizard.sh [Option]
+Options:
         --edit-configs      add, remove, edit configurations and entries
         --help              this page
 EOF
 }
 
 function edit_configs () {
-    local menu
-    menu="$(whiptail    --title "Configuration Menu" \
+    local menu="$(whiptail    --title "Configuration Menu" \
                         --menu "Select application to configure" \
                         10 70 3 \
                         "Edit" "" \
@@ -63,8 +55,8 @@ function edit_configs () {
                         "Remove" "" \
                         3>&1 1>&2 2>&3 )"
 
-    exitstatus="$?"
-    if [ "$exitstatus" = 1 ]; then exit; fi
+    # Exit if "cancelled is pressed"
+    if [ "$?" = 1 ]; then exit; fi
 
     local menu_options
     mapfile -t menu_options <<< "${menu[@]}"
@@ -98,34 +90,32 @@ function main () {
     if (( ${#CONFIG_FILES[@]} == 0 )); then echo "Could not find any configuration files"; exit 1; fi
 
     # Get all labels from config files to display them in the main menu screen
-    local menu_entries
+    local menu_entries=( "Edit dotfiles" "" )
 
     # Iterate all config files
     for config in "${CONFIG_FILES[@]}"; do
         # Gets the filepath from JSON config
-        local dotfile
-        dotfile="$(cat $config | jq -r '.dotfile')"
+        local dotfile="$(cat $config | jq -r '.dotfile')"
 
         # Gets the dotfile description to display in the main menu
-        local description
-        description="$(cat "$config" | jq -r '.description')"
+        local description="$(cat "$config" | jq -r '.description')"
 
         # Assemble the main menu entries
-        menu_entries+=( "$dotfile" )
-        menu_entries+=( "         $description" )
+        menu_entries+=( "$dotfile" "         $description" )
     done
 
     MENU="$(whiptail    --title "Configure Application" \
                         --menu "Select application to configure" \
+                        --ok-button "Select" \
+                        --cancel-button "Exit" \
                         10 70 3 \
                         "${menu_entries[@]}" \
                         3>&1 1>&2 2>&3 )"
 
-    exitstatus="$?"
-    if [ "$exitstatus" = 1 ]; then cleanup; exit; fi
-
-    # Open the selected menu
-    bash_setup "$HOME/$MENU"
+    if [ "$?" = 1 ]; then cleanup; exit; fi
+    
+    # Go to edit dotfiles page if selected. Otherwise proceed with configuration
+    [ "${MENU[0]}" = "${menu_entries[0]}" ] && echo "Edit dotfiles" || bash_setup "$HOME/$MENU"
 }
 
 cleanup () {
@@ -144,5 +134,8 @@ for arg in "$@"; do
     shift
 done
 
-dependency_check
+# Checks for dependencies
+dependency_check || exit
+
+# Main loop
 main

@@ -2,28 +2,15 @@ function get_subcategories() {
     ### Returns the subcategories in a menu
     ### Arguments:
     ###     - category [string]: The category that this subcategories belong to
-    ###     - raw [bool]: Whether jq should return a string in raw format
     ### Returns:
     ###     - string(): A string array with subcategories
     ### Example:
-    ###     - get_subcategory category="foo" raw=True
+    ###     - get_subcategories "foo"
 
-    # Maps arguments to variables
-    for arg in "$@"; do
-        IFS="=" read -ra argv <<< "$arg"
-        case "${argv[0]}" in
-            "category") category="${argv[1]}";;
-            "raw") raw="${argv[1]}";;
-        esac
-        shift
-    done
+    local category="$1"
     
     local subcategories
-    if [ "$raw" = False ]; then
-        mapfile -t subcategories <<< "$(cat "$CONFIGS" | jq ".categories.$category.subCategory | keys[]")"
-    else
-        mapfile -t subcategories <<< "$(cat "$CONFIGS" | jq -r ".categories.$category.subCategory | keys[]")"
-    fi
+    mapfile -t subcategories <<< "$(cat "$CONFIGS" | jq -r ".categories.$category.subCategory | keys[]")"
 
     # Return statement
     echo "${subcategories[@]}"
@@ -67,18 +54,10 @@ function bash_setup () {
                             "${new_menu[@]}" \
                             3>&1 1>&2 2>&3 )"
     # Prompt the user to override bashrc with the new changes
-    exitstatus=$?
-    if [[ $exitstatus = 1 ]]; then
-        override_bashrc     "dotfile_no_dot=${dotfile_no_dot[1]}" \
-                            "config=$CONFIGS" \
-                            "dotfile_path=$dotfile"
-    fi
+    [[ "$?" = 1 ]] && override_bashrc "$CONFIGS" "$dotfile" "${dotfile_no_dot[1]}"
 
     # Direct user to the selected menu
-    completions "category=${menu,}" \
-                "config=$CONFIGS" \
-                "config_no_path=${dotfile_no_dot[1]}.configs.json" \
-                "dotfile=$dotfile"
+    completions "${menu,}" "$CONFIGS" "${dotfile_no_dot[1]}.configs.json" "$dotfile"
     
     unset dotfile_no_dot
 }
@@ -94,47 +73,28 @@ function completions () {
     ###     - category [string]: Show the menu of this category
     ###     - config [string]: Configuration file path
     ###     - config_no_path [string]: Configuration file name
-    ###
+    ###     - dotfile [string]: dotfile path
 
     
-    local argv
-    for arg in "$@"; do
-        IFS="=" read -ra argv <<< "$arg"
-        case "${argv[0]}" in
-            "category") local category="${argv[1]}";;
-            "config") local config="${argv[1]}";;
-            "config_no_path") local config_no_path="${argv[1]}";;
-            "dotfile") local dotfile="${argv[1]}";;
-        esac
-        shift
-    done
+    local category="$1"
+    local config="$2"
+    local config_no_path="$3"
+    local dotfile="$4"
 
     # Gets all subcategories in the menu
     local subcategories
-    IFS=" " read -ra subcategories <<< "$(get_subcategories category="$category" raw=True)"
+    IFS=" " read -ra subcategories <<< "$(get_subcategories "$category")"
 
     # Generate menu entries
-    # TODO - Fix the ON/OFF switch to dynamically match what's in the dotfile and keep the change until the user goes back to main menu
     local menu_entry
-    local i=0
     for subcat in "${subcategories[@]}"; do
-        # Description of this entry
-        local description
-        description="$(cat "$config" | jq -r ".categories.$category.subCategory.$subcat.description")"
-
-        # Whether the checkbox should be ON or OFF
-        local checkbox
-        checkbox="$(cat "$config" | jq -r ".categories.$category.subCategory.$subcat.checkbox")"
-
+        local description="$(jq -r ".categories.$category.subCategory.$subcat.description" "$config")"
+        local checkbox="$(jq -r ".categories.$category.subCategory.$subcat.checkbox" "$config")"
         menu_entry+=( "$subcat" "$description" "$checkbox" )
-        i+=1
     done
     
-    unset i
-
     # Build the checklist menu
-    local menu
-    menu="$(whiptail  --title "${category^}" \
+    local menu="$(whiptail  --title "${category^}" \
                                     --checklist \
                                     --separate-output "Select applications" \
                                     --ok-button "Select" \
@@ -144,24 +104,21 @@ function completions () {
                                     3>&1 1>&2 2>&3)"
 
     # Returns to bash menu if cancelled
-    exitstatus=$?
-    [ $exitstatus = 1 ] && bash_setup "$dotfile"
+    [ $? = 1 ] && bash_setup "$dotfile"
 
-    local menu_options
-    mapfile -t menu_options <<< "$menu"
+    local menu_options; mapfile -t menu_options <<< "$menu"
 
     # Updates new checkboxes and overwrites them in JSON config
     if [ ! -d "$TMP" ]; then mkdir "$TMP"; fi
 
-
+    # TODO - Bug: ONs and OFFs are persisted even after going back to main menu
     # Sort ON entries
     local ons
     local offs
 
     for subcat in "${subcategories[@]}"; do
         for option in "${menu_options[@]}"; do
-            # If subcat matches option, then consider subcat as ON, otherwise OFF
-            if [[ "$subcat" = "$option" ]]; then ons+=("$option"); fi
+            [[ "$subcat" = "$option" ]] && ons+=("$option")
         done
     done
 
@@ -178,15 +135,13 @@ function completions () {
 
     # Overwrite entries for ONs
     for on in "${ons[@]}"; do
-        cat "$config" | jq -r '.categories.'"$category"'.subCategory.'"$on"'.checkbox = "ON"' > "$tmp_file" && mv "$tmp_file" "$config"
+        jq -r '.categories.'"$category"'.subCategory.'"$on"'.checkbox = "ON"' "$config" > "$tmp_file" && mv "$tmp_file" "$config"
     done
 
     # Overwrite entries for OFFs
     for off in "${offs[@]}"; do
-        cat "$config" | jq -r '.categories.'"$category"'.subCategory.'"$off"'.checkbox = "OFF"' > "$tmp_file" && mv "$tmp_file" "$config"
+        jq -r '.categories.'"$category"'.subCategory.'"$off"'.checkbox = "OFF"' "$config" > "$tmp_file" && mv "$tmp_file" "$config"
     done
-
-    unset ons offs tmp_file argv
 
     # Go back to submenu
     bash_setup "$dotfile"
@@ -214,45 +169,27 @@ function override_bashrc() {
 
     # Confirm changes
     whiptail --yesno 'Save changes to dotfile?' 10 78 3
-    local exitstatus="$?"
-    [ "$exitstatus" -eq 1 ] && main
-    unset exitstatus
+    [ "$?" -eq 1 ] && main
 
     # Generate new dotfile with boilerplate code if available
-    if [ -f "$dotfile_path" ]; then
-        rm "$dotfile_path";
-        touch "$dotfile_path"
-    fi
+    [ -f "$dotfile_path" ] && rm "$dotfile_path" && touch "$dotfile_path"
 
     local templates="$SCRIPT_PATH/templates/$dotfile_no_dot.templates.txt"
-    if [ -f "$templates" ]; then 
-        cat "$templates" > "$dotfile_path"
-        echo "" >> "$dotfile_path"
-
-    fi
+    [ -f "$templates" ] && cat "$templates" > "$dotfile_path" && echo "" >> "$dotfile_path"
 
     # Iterate over all categories, then for each of the subcategories
     # copy the snippets to the dotfile if its checkbox is ON
-    local categories
-    mapfile -t categories <<< "$(cat "$config" | jq -r ".categories | keys[]")"
+    local categories; mapfile -t categories <<< "$(cat "$config" | jq -r ".categories | keys[]")"
     
     for cat in "${categories[@]}"; do
-        local subcategories
-        mapfile -t subcategories <<< "$(cat "$config" | jq -r ".categories.$cat.subCategory | keys[]")"
+        local subcategories; mapfile -t subcategories <<< "$(cat "$config" | jq -r ".categories.$cat.subCategory | keys[]")"
 
         for subcat in "${subcategories[@]}"; do
             # Finally, copy snippets to dotfile if checkbox is ON
-            checkbox="$(cat $config | jq -r ".categories.$cat.subCategory.$subcat.checkbox")"
-
-            if [[ "$checkbox" = "ON" ]]; then
-                cat "$config" | jq -r ".categories.$cat.subCategory.$subcat.snippet" >> "$dotfile"
-                echo "" >> "$dotfile"
-            fi
+            checkbox="$(jq -r ".categories.$cat.subCategory.$subcat.checkbox" "$config")"
+            [[ "$checkbox" = "ON" ]] && jq -r ".categories.$cat.subCategory.$subcat.snippet" "$config" >> "$dotfile" && echo "" >> "$dotfile"
         done
-        unset subcategories
     done
-
-    unset categories
 
     # Back to main menu
     main
