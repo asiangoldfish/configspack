@@ -4,7 +4,7 @@
 DEPS=( "jq" )
 
 SCRIPT_PATH="$(dirname "$0")"
-TMP="$SCRIPT_PATH/tmp"
+TMP="/tmp"
 
 CONFIGS_DIR="$SCRIPT_PATH/configs"
 CONFIG_FILES=()  # List of all available config files
@@ -129,9 +129,10 @@ function main () {
 }
 
 cleanup () {
-    if [ -d "$TMP" ]; then
-        rm -r "$TMP"
-    fi
+    #if [ -d "$TMP" ]; then
+    #    rm -r "$TMP"
+    #fi
+    :
 }
 
 for arg in "$@"; do
