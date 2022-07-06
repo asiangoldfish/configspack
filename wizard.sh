@@ -13,8 +13,8 @@ NAME="configspack"                          # This application's name
 VERSION="1.0.0"                             # Application version number
 
 # include statements
-source  "$SCRIPT_PATH/scripts/setup.sh" \
-        "$SCRIPT_PATH/scripts/manage_configs.sh"
+source "$SCRIPT_PATH/scripts/setup.sh"
+source "$SCRIPT_PATH/scripts/manage_configs.sh"
 
 function get_configs () {
     ### Description:    Gets all supported dotfiles based on the configuration files available
@@ -44,36 +44,6 @@ Options:
         --edit-configs      add, remove, edit configurations and entries
         --help              this page
 EOF
-}
-
-function edit_configs () {
-    local menu="$(whiptail    --title "Configuration Menu" \
-                        --menu "Select application to configure" \
-                        10 70 3 \
-                        "Edit" "" \
-                        "Add" "" \
-                        "Remove" "" \
-                        3>&1 1>&2 2>&3 )"
-
-    # Exit if "cancelled is pressed"
-    if [ "$?" = 1 ]; then exit; fi
-
-    local menu_options
-    mapfile -t menu_options <<< "${menu[@]}"
-    
-    unset menu
-
-    for option in "${menu_options[@]}"; do
-        case "$option" in 
-            "Edit") edit_config;;
-            "Add") add_config;;
-            "Remove") remove_config;;
-        esac
-    done
-
-    unset menu_options option exitstatus menu
-
-    exit
 }
 
 # Fetches all config files
@@ -115,7 +85,7 @@ function main () {
     if [ "$?" = 1 ]; then cleanup; exit; fi
     
     # Go to edit dotfiles page if selected. Otherwise proceed with configuration
-    [ "${MENU[0]}" = "${menu_entries[0]}" ] && echo "Edit dotfiles" || bash_setup "$HOME/$MENU"
+    [ "${MENU[0]}" = "${menu_entries[0]}" ] && edit_config || bash_setup "$HOME/$MENU"
 }
 
 cleanup () {

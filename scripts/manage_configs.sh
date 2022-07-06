@@ -1,6 +1,4 @@
-
-
-edit_config () {
+function edit_config () {
     # Create and add entries to the menu
     local config_names
     for config in "${CONFIG_FILES[@]}"; do
