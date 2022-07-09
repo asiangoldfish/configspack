@@ -52,9 +52,6 @@ get_configs
 function main () {
     ### Main menu
 
-    # Creates a tmp directory if it doesn't already exist
-    # if [ ! -d "./tmp" ]; then mkdir "./tmp"; fi
-
     # TODO - Write a better error message. Maybe create a manpage or help page to direct the user to?
     # Return an error message if no JSON config files were found
     if (( ${#CONFIG_FILES[@]} == 0 )); then echo "Could not find any configuration files"; exit 1; fi
