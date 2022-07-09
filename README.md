@@ -7,6 +7,7 @@ Configspack is a post-installation script for UNIX-like systems and is written p
 ## Table of Content
 - [Getting Started](#getting-started)
 - [Customizations](#customizations)
+- [TODO](#todo)
 
 ## Getting Started
 Install dependencies:
@@ -133,4 +134,7 @@ From the project directory,
 cd templates
 touch dotfilename.templates.txt
 ```
+
+## TODO
+- [] Compile all configs into one single, portable file. 
 
