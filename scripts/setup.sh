@@ -156,16 +156,9 @@ function override_bashrc() {
     ###     - dotfile_no_dot [string]: Dotfile name without the dot
 
     # Map args to variables
-    local argv
-    for arg in "$@"; do
-        IFS="=" read -ra argv <<< "$arg"
-        case "${argv[0]}" in
-            "config") local config="${argv[1]}";;
-            "dotfile_path") local dotfile_path="${argv[1]}";;
-            "dotfile_no_dot") local dotfile_no_dot="${argv[1]}";;
-        esac
-        shift
-    done
+    local config="$1"
+    local dotfile_path="$2"
+    local dotfile_no_dot="$3"
 
     # Confirm changes
     whiptail --yesno 'Save changes to dotfile?' 10 78 3
