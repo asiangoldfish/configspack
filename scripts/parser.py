@@ -18,7 +18,7 @@ from sys import argv                                    # handle script args
 from pathlib import Path                                # get file paths
 from configparser import ConfigParser                   # parse ini file
 
-exit_code = str()                                       # exit code to stderr
+exit_code = 0                                           # exit code to stderr
 
 script_path = Path(__file__).resolve().parent           # this script's path
 config_path = f'{script_path}/../configs/config.ini'
@@ -102,6 +102,7 @@ def set_exit_code(num: int):
         num (int): The number to set as error code
     """
 
+    global exit_code
     exit_code = num
 
 
@@ -147,8 +148,8 @@ Options:
     get_all_sections_str            gets all sections in the config and formats
                                     the output as string
     get_value [section] [key]       gets the value from a given section and key
-    help                            this page
-""", end='')
+    help                            this page""",
+    end='')
     set_exit_code(0)
 
 
@@ -158,16 +159,21 @@ if len(argv) == 1:
     sysexit(get_exit_code())
 
 # let script execution call functions based on the script argv
-func_name = str()
-parent = str()
-section = str()
-value = str()
+arg_vars = {
+    'func_name': '',
+    'parent': '',
+    'section': '',
+    'value': '',
+}
 
+# we create a hard copy of argv to avoid manipulating it
 process_argv = argv.copy()
-# Remove file name in arr
+# remove file name in arr
 process_argv.pop(0)
 
-# for each argument in argv,
+# map arguments to its corresponding variables
+# assign exit_code number 2 if any of the assignments were
+# not successful, and exit the program thereafter
 for arg in process_argv:
     check = check_missing_value(arg)
     arg_split = arg.split('=', 1)
@@ -183,26 +189,17 @@ for arg in process_argv:
         case 'section':
             section = check[0]
             set_exit_code(check[1])
-            print(check[1])
             if check[1]: break
         case 'value':
             value = check[0]
             set_exit_code(check[1])
-
             if check[1]: break
-        case _:
-            print(f'Argument \'{arg_split}\' is not valid')
-            set_exit_code(4)
-            if check[1]: break
-
-print(exit_code)
-
+            
 if get_exit_code() != 0:                                  # Only proceed if error code is 0
     if get_exit_code() == 2:
         print(f'Argument \'{arg[0]}\' expected a value, but received none')
         sysexit(get_exit_code())
 
-print("continue")
 if func_name != "":
     match func_name:
         case 'get_all_nested_sections_str':
@@ -215,10 +212,5 @@ if func_name != "":
             print(get_value(section, key))
         case 'usage':
             usage()
-
-        # Default case
-        case _:
-            print(f'{func_name} is an invalid function')
-            set_exit_code(3)
 
 sysexit(get_exit_code())
