@@ -67,7 +67,8 @@ def get_all_nested_sections_str(parent: str):
     """
 
     for elem in get_all_sections_arr():
-        print(elem)
+        if parent in elem:
+            print(elem)
 
 
 def get_all_sections_arr():
@@ -160,7 +161,7 @@ if len(argv) == 1:
 
 # let script execution call functions based on the script argv
 arg_vars = {
-    'func_name': '',
+    'function': '',
     'parent': '',
     'section': '',
     'value': '',
@@ -177,33 +178,19 @@ process_argv.pop(0)
 for arg in process_argv:
     check = check_missing_value(arg)
     arg_split = arg.split('=', 1)
-    match arg_split[0]:
-        case 'func_name':
-            func_name = check[0]
-            set_exit_code(check[1])
-            break
-        case 'parent':
-            parent = check[0]
-            set_exit_code(check[1])
-            if check[1]: break
-        case 'section':
-            section = check[0]
-            set_exit_code(check[1])
-            if check[1]: break
-        case 'value':
-            value = check[0]
-            set_exit_code(check[1])
-            if check[1]: break
-            
-if get_exit_code() != 0:                                  # Only proceed if error code is 0
-    if get_exit_code() == 2:
-        print(f'Argument \'{arg[0]}\' expected a value, but received none')
-        sysexit(get_exit_code())
+    
+    if len(arg_split) == 1:
+        print(f'Argument \'{arg_split[0]}\' is missing a value. Example: \'{arg_split[0]}=foo\'')
+        sysexit(2)
 
-if func_name != "":
-    match func_name:
+    for key in list(arg_vars.keys()):
+        if arg_split[0] == key:
+            arg_vars[f'{key}'] = arg_split[1]
+
+if arg_vars['function'] != "":
+    match arg_vars['function']:
         case 'get_all_nested_sections_str':
-            print(get_all_nested_sections_str())
+            print(get_all_nested_sections_str(arg_vars['parent']))
         case 'get_all_sections_arr':
             print(get_all_sections_arr())
         case 'get_all_sections_str':
