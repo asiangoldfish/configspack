@@ -95,19 +95,19 @@ def get_exit_code():
     return exit_code
 
 
-def get_value(section: str, key: str):
+def get_value(arg_dict: dict):
     """
     Gets a the value of a given key in a section.
 
     Parameters:
-        - section (str): section to search for the key in
-        - key (str): key to look up
+        - arg_dict (dict): dictionary containing section and key to search for
+                           value
     Return:
         str: Value based on section and key
     """
 
     set_exit_code(0)
-    return config.get(section, key)
+    return config.get(arg_dict['section'], arg_dict['key'])
 
 
 def get_root_sections(section: dict):
@@ -155,6 +155,7 @@ if len(argv) == 1:
 arg_vars = {
     '--debug': '',
     '--file': '',
+    '--key': '',
     '--pattern': '',
     '--section': '',
 }
@@ -196,6 +197,10 @@ for i, arg in enumerate(process_argv):
             case '--file':
                 validate_arg(process_argv, arg_vars, arg)
                 arg_vars['--file'] = process_argv[i + 1]
+                skip_arg = True
+            case '--key':
+                validate_arg(process_argv, arg_vars, arg)
+                arg_vars['--key'] = process_argv[i + 1]
                 skip_arg = True
             case '--pattern':
                 validate_arg(process_argv, arg_vars, arg)
