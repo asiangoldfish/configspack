@@ -1,9 +1,4 @@
 #!/usr/bin/python3
-# File: parser.py
-# This script is a library of functions parsing initialize (INI) files and is
-# intended for usage in shell scripts. To call a function, execute the script
-# and pass the function name as the first and section name as the second argument.
-# Example: /file/path/parser.py get_value section_name
 
 # Exit codes:
 #   0: this script executed successfully
@@ -11,7 +6,7 @@
 #   2: an argument expected a value but had none
 #   3: the function name passed as argument is invalid
 #   4: script was executed with invalid arguments [VALUES]
-
+#   5: no config file path was passed
 
 from sys import exit as sysexit                         # exit script
 from sys import argv                                    # handle script args
@@ -21,13 +16,9 @@ from configparser import ConfigParser                   # parse ini file
 exit_code = 0                                           # exit code to stderr
 
 script_path = Path(__file__).resolve().parent           # this script's path
-config_path = f'{script_path}/../configs/config.ini'
-
-if not Path(config_path).is_file():                     # check if config exists
-    sysexit(1)
 
 config = ConfigParser()
-config.read(f'{script_path}/../configs/config.ini')     # parse the config file
+config_path = ""
 
 
 def check_missing_value(arg: str):
@@ -51,7 +42,7 @@ def check_missing_value(arg: str):
         return [0, 2]
 
 
-def get_all_nested_sections_str(parent: str):
+def get_all_nested_sections_str(arg_vars: str):
     """
     Gets all nested sections in one line of string
 
@@ -65,34 +56,20 @@ def get_all_nested_sections_str(parent: str):
         str: All nested sections based on the given
              parameters
     """
-
-    for elem in get_all_sections_arr():
-        if parent in elem:
+    
+    for elem in config.sections():
+        if arg_vars['--pattern'] in elem:
             print(elem)
 
 
-def get_all_sections_arr():
-    """
-    Gets all sections of the config file
-
-    Returns:
-        str[]: All sections of the config file
-    """
-
-    set_exit_code(0)
-    return config.sections()
-
-
-def get_all_sections_str():
-    """
-    Gets all sections of the config file formatted as a string
-
-    Returns:
-        str: All sections of the config file
-    """
-
-    set_exit_code(0)
-    return ', '.join(str(x) for x in config.sections())
+def validate_arg(argv: list, arg_vars: dict, arg):
+    if (i + 1 < len(argv)):
+        if (argv[i + 1] in arg_vars.keys()):
+            print('Missing argument:', arg)
+            sysexit(2)
+    else:
+        print(f'Missing argument: {arg}')
+        sysexit(2)
 
 
 def set_exit_code(num: int):
@@ -133,24 +110,39 @@ def get_value(section: str, key: str):
     return config.get(section, key)
 
 
+def get_root_sections(section: dict):
+    """Gets sections without any nested sections
+    """
+
+    for elem in config.sections():
+        if not '/' in elem:
+            print(elem)
+
 def usage():
     print("""parser.py [OPTION]
 parser.py [OPTIONS] [VALUES]
 
-This script is intended for use in shell scripts and parses an
-initialization (INI) file. Call functions in the script by
-adding its function name as the first argument to the script.
+This script is intended parses an initialization file and outputs results
+to stdout.
 
-Example: parser.py get_value Default name
+To learn more about what each option does and arguments it requires,
+use the help flag with it.
+
+Example: parser.py --value --help
 
 Options:
-    get_all_sections_arr            gets all sections in the config and formats
-                                    the output as an array
-    get_all_sections_str            gets all sections in the config and formats
-                                    the output as string
-    get_value [section] [key]       gets the value from a given section and key
-    help                            this page""",
-    end='')
+    -h, --help                                  this page
+        --root-sections                         gets the parent sections
+        --search-section [pattern]              search for sections with regex
+        --value [section] [key]                 gets the value from a given section and key
+        --version                               outputs version information and exit
+
+Values:
+        --pattern                               parent of nested sections
+        --section                               definite section to use
+        --file                                  target initialization file to parse
+""",
+          end='')
     set_exit_code(0)
 
 
@@ -161,10 +153,10 @@ if len(argv) == 1:
 
 # let script execution call functions based on the script argv
 arg_vars = {
-    'function': '',
-    'parent': '',
-    'section': '',
-    'value': '',
+    '--debug': '',
+    '--file': '',
+    '--pattern': '',
+    '--section': '',
 }
 
 # we create a hard copy of argv to avoid manipulating it
@@ -172,32 +164,61 @@ process_argv = argv.copy()
 # remove file name in arr
 process_argv.pop(0)
 
-# map arguments to its corresponding variables
-# assign exit_code number 2 if any of the assignments were
-# not successful, and exit the program thereafter
-for arg in process_argv:
-    check = check_missing_value(arg)
-    arg_split = arg.split('=', 1)
-    
-    if len(arg_split) == 1:
-        print(f'Argument \'{arg_split[0]}\' is missing a value. Example: \'{arg_split[0]}=foo\'')
-        sysexit(2)
+# stores the identifier to invoke a given function at a later point when all
+# arguments have been parsed
+skip_arg = False
 
-    for key in list(arg_vars.keys()):
-        if arg_split[0] == key:
-            arg_vars[f'{key}'] = arg_split[1]
+for i, arg in enumerate(process_argv):
+    if not skip_arg:
+        match arg:
+            # match functions
+            case '-h' | '--help':
+                usage()
+            case '--root-sections':
+                execute_function = get_root_sections
+            case '--search-section':
+                execute_function = get_all_nested_sections_str
+            case '--value':
+                execute_function = get_value
 
-if arg_vars['function'] != "":
-    match arg_vars['function']:
-        case 'get_all_nested_sections_str':
-            print(get_all_nested_sections_str(arg_vars['parent']))
-        case 'get_all_sections_arr':
-            print(get_all_sections_arr())
-        case 'get_all_sections_str':
-            print(get_all_sections_str())
-        case 'get_value':
-            print(get_value(section, key))
-        case 'usage':
-            usage()
+            # match arguments
+            case '--debug':
+                if i + 1 < len(argv):
+                    next_arg = argv[i + 1]
+                    if next_arg in arg_vars.keys():
+                        if next_arg != True or False:
+                            print(f'Argument {arg} requires argument True or False')
+                            sysexit(2)
+
+                arg_vars['--debug'] = process_argv[i + 1]
+                skip_arg = True
+
+            case '--file':
+                validate_arg(process_argv, arg_vars, arg)
+                arg_vars['--file'] = process_argv[i + 1]
+                skip_arg = True
+            case '--pattern':
+                validate_arg(process_argv, arg_vars, arg)
+                arg_vars['--pattern'] = process_argv[i + 1]
+                skip_arg = True
+            case '--section':
+                validate_arg(process_argv, arg_vars, arg)
+                arg_vars['--section'] = process_argv[i + 1]
+                skip_arg = True
+    else:
+        skip_arg = False
+
+# read the config file
+read_configs = config.read(arg_vars['--file'])
+
+# if config file was unsuccessfully read, then exit the program
+if len(read_configs) == 0:
+    print('No configuration file was passed')
+    sysexit(5)
+
+try:
+    execute_function(arg_vars)
+except NameError:
+    print(f'{argv[0]}: No actions to execute. Use \'{argv[0]} --help\' for a list of commands')
 
 sysexit(get_exit_code())
