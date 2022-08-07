@@ -1,17 +1,19 @@
 #!/usr/bin/python3
 
 # Exit codes:
-#   0: this script executed successfully
-#   1: the configuration file could not be found
-#   2: an argument expected a value but had none
-#   3: the function name passed as argument is invalid
-#   4: script was executed with invalid arguments [VALUES]
-#   5: no config file path was passed
+#   0: This script executed successfully
+#   1: The configuration file could not be found
+#   2: An argument expected a value but had none
+#   3: The function name passed as argument is invalid
+#   4: Script was executed with invalid arguments [VALUES]
+#   5: No config file path was passed
+#   6: Argument '--value' requires a valid section and key
 
 from sys import exit as sysexit                         # exit script
 from sys import argv                                    # handle script args
 from pathlib import Path                                # get file paths
 from configparser import ConfigParser                   # parse ini file
+from configparser import NoSectionError                 
 
 exit_code = 0                                           # exit code to stderr
 
@@ -105,9 +107,15 @@ def get_value(arg_dict: dict):
     Return:
         str: Value based on section and key
     """
-
+    
+    try:
+        value = config.get(arg_dict['--section'], arg_dict['--key'])
+        print(value)
+    except NoSectionError:
+        print('parser.py: Argument \'--value\' requires valid section and key')
+        set_exit_code(6)
+        return
     set_exit_code(0)
-    return config.get(arg_dict['section'], arg_dict['key'])
 
 
 def get_root_sections(section: dict):
@@ -117,6 +125,7 @@ def get_root_sections(section: dict):
     for elem in config.sections():
         if not '/' in elem:
             print(elem)
+    set_exit_code(0)
 
 def usage():
     print("""parser.py [OPTION]
