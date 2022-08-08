@@ -1,48 +1,45 @@
 function get_subcategories() {
     ### Returns the subcategories in a menu
     ### Arguments:
-    ###     - category [string]: The category that this subcategories belong to
+    ###     - category [str]: The category that this subcategories belong to
+    ###     - search_depth [int]: Nested sections depth
     ### Returns:
     ###     - string(): A string array with subcategories
     ### Example:
     ###     - get_subcategories "foo"
 
-    local category="$1"
-    
     local subcategories
-    mapfile -t subcategories <<< "$(cat "$CONFIGS" | jq -r ".categories.$category.subCategory | keys[]")"
+    local depth
+    depth="$2"
+
+    subcat="$($parser --file $CONFIG \
+            --search-section \
+            --pattern "$1" | \
+            awk 'BEGIN{FS="/"};{print $'"$depth"'}' | \
+            sed '$!N; /^\(.*\)\n\1$/!P; D' | sed '/^$/d')"
+ 
+    subcat_str="${subcat//[$'\t\r\n']/ }"
 
     # Return statement
-    echo "${subcategories[@]}"
+    echo "${subcat_str[@]}"
 }
 
 function bash_setup () {
     ### Main entry to the dotfile's configuration menu
-    ###
-    ### Arguments:
-    ###     - dotfile [string]: Name of dotfile
+    subcat="$(get_subcategories $1 2)"
+    IFS=' ' read -ra categories <<< "$subcat"
     
-    local dotfile="$1"
-    
-    # Fetches the config file for this dotfile
-    local dotfile_no_dot
-    IFS="." read -ra dotfile_no_dot <<< "$dotfile"
-    local CONFIGS="$CONFIGS_DIR/${dotfile_no_dot[1]}.configs.json"
-
-    # Create a new dotfile if it doesn't already exists
-    if [ ! -f "$dotfile" ]; then touch "$dotfile"; fi
-
-    # Maps all categories
-    local CATEGORIES
-    mapfile -t CATEGORIES <<< "$(cat "$CONFIGS" | jq -r '.categories | keys[]')"
-
     # Creates a new menu based on the categories array and JSON config
     local new_menu=()
-    for category in "${CATEGORIES[@]}"; do
+    for category in "${categories[@]}"; do
+
         # Sub menu description
-        description="$(cat $CONFIGS | jq -r ".categories.$category.menuDescription")"
-        new_menu+=( "${category^}" )
-        new_menu+=( "$description" )
+        description="$($parser  --value \
+                                --file $CONFIG \
+                                --section "$1/$category" \
+                                --key description)"
+
+        new_menu+=( "$category" "$description" )
     done
 
     # Bashrc Main Menu
@@ -53,11 +50,12 @@ function bash_setup () {
                             --cancel-button "Back" 10 78 3 \
                             "${new_menu[@]}" \
                             3>&1 1>&2 2>&3 )"
-    # Prompt the user to override bashrc with the new changes
+
+# Prompt the user to override bashrc with the new changes
     [[ "$?" = 1 ]] && override_bashrc "$CONFIGS" "$dotfile" "${dotfile_no_dot[1]}"
 
     # Direct user to the selected menu
-    completions "${menu,}" "$CONFIGS" "${dotfile_no_dot[1]}.configs.json" "$dotfile"
+    completions "${menu}" "$1"
     
     unset dotfile_no_dot
 }
@@ -77,24 +75,28 @@ function completions () {
 
     
     local category="$1"
-    local config="$2"
-    local config_no_path="$3"
-    local dotfile="$4"
+    local app_name="$2"
+    local subcategories
+    local menu_entry
+    local subcat
+    local description
+    local menu
 
     # Gets all subcategories in the menu
-    local subcategories
-    IFS=" " read -ra subcategories <<< "$(get_subcategories "$category")"
+    IFS=" " read -ra subcategories <<< "$(get_subcategories "$category" 3)"
+    
 
     # Generate menu entries
-    local menu_entry
     for subcat in "${subcategories[@]}"; do
-        local description="$(jq -r ".categories.$category.subCategory.$subcat.description" "$config")"
-        local checkbox="$(jq -r ".categories.$category.subCategory.$subcat.checkbox" "$config")"
-        menu_entry+=( "$subcat" "$description" "$checkbox" )
+        description="$($parser --value \
+                                    --file $CONFIG \
+                                    --section $app_name/$category/$subcat \
+                                    --key description)"
+        menu_entry+=( "$subcat" "$description" 'ON' )
     done
-    
+
     # Build the checklist menu
-    local menu="$(whiptail  --title "${category^}" \
+    menu="$(whiptail                --title "${category}" \
                                     --checklist \
                                     --separate-output "Select applications" \
                                     --ok-button "Select" \
@@ -103,45 +105,15 @@ function completions () {
                                     "${menu_entry[@]}" \
                                     3>&1 1>&2 2>&3)"
 
+
     # Returns to bash menu if cancelled
-    [ $? = 1 ] && bash_setup "$dotfile"
+    [ $? = 1 ] && bash_setup "Bash"
+
 
     local menu_options; mapfile -t menu_options <<< "$menu"
-
-    # Updates new checkboxes and overwrites them in JSON config
-    if [ ! -d "$TMP" ]; then mkdir "$TMP"; fi
-
-    # TODO - Bug: ONs and OFFs are persisted even after going back to main menu
-    # Sort ON entries
-    local ons
-    local offs
-
-    for subcat in "${subcategories[@]}"; do
-        for option in "${menu_options[@]}"; do
-            [[ "$subcat" = "$option" ]] && ons+=("$option")
-        done
-    done
-
-    # Sort OFF entries
-    for i in "${subcategories[@]}"; do
-        skip=
-        for j in "${menu_options[@]}"; do
-            [[ $i == "$j" ]] && { skip=1; break; }
-        done
-        [[ -n $skip ]] || offs+=( "$i" )
-    done
-
-    local tmp_file="$TMP/$config_no_path"
-
-    # Overwrite entries for ONs
-    for on in "${ons[@]}"; do
-        jq -r '.categories.'"$category"'.subCategory.'"$on"'.checkbox = "ON"' "$config" > "$tmp_file" && mv "$tmp_file" "$config"
-    done
-
-    # Overwrite entries for OFFs
-    for off in "${offs[@]}"; do
-        jq -r '.categories.'"$category"'.subCategory.'"$off"'.checkbox = "OFF"' "$config" > "$tmp_file" && mv "$tmp_file" "$config"
-    done
+    
+    echo "${menu_options[@]}"
+    exit
 
     # Go back to submenu
     bash_setup "$dotfile"

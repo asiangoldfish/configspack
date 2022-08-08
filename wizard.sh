@@ -3,27 +3,19 @@
 # Global variables
 DEPS=( "jq" )                               # Dependencies
 
-SCRIPT_PATH="$(dirname "$0")"               # This script's root directory
+SCRIPT_NAME="$(basename $0)"
+SCRIPT_PATH="$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)"             # This script's root directory
 TMP="/tmp"                                  # Temporary directory path
-
-CONFIGS_DIR="$SCRIPT_PATH/configs"          # Where all configs are stored at
-CONFIG_FILES=()                             # List of all available config files
 
 NAME="configspack"                          # This application's name
 VERSION="1.0.0"                             # Application version number
+
+parser="$SCRIPT_PATH/scripts/parser.py"     # parse ini file
 
 # include statements
 source "$SCRIPT_PATH/scripts/setup.sh"
 source "$SCRIPT_PATH/scripts/manage_configs.sh"
 
-function get_configs () {
-    ### Description:    Gets all supported dotfiles based on the configuration files available
-    ###                 The format should be as follows: dotfile.configs.json
-
-    for entry in "./configs"/*; do
-        [ ! -f "$entry" ] && continue || CONFIG_FILES+=( "$entry" )
-    done
-}
 
 function dependency_check () {
     ### Description:    Ensures that all dependencies are present
@@ -35,42 +27,80 @@ function dependency_check () {
     (( ${#missing_dependencies[@]} > 0 )) && printf "Missing dependencies were found:\n%s\n" "${missing_dependencies[@]}" && return 1 ||  return 0
 }
 
+
 function usage () {
-    cat << EOF
-$NAME, version $VERSION
-Usage:  wizard.sh
-        wizard.sh [Option]
-Options:
+    printf 'Version %s
+Usage:  %s
+        %s [OPTION]
+
+Manage configuration files
+
+Deploy or edit configuration files across the system. %s manages them from a single file,
+making them portable between different UNIX and UNIX-like systems. The master configuration file is
+read from the following locations:
+
+- $XDG_CONFIG_HOME/configspack/config.ini
+- $HOME/.configspack.ini
+- /etc/configspack/config.ini
+- $HOME/$SCRIPT_PATH/configs/config.ini
+
+Option:
         --edit-configs      add, remove, edit configurations and entries
         --help              this page
-EOF
+' "$VERSION" "$SCRIPT_NAME" "$SCRIPT_NAME" "$SCRIPT_NAME"
 }
 
-# Fetches all config files
-get_configs
 
 function main () {
     ### Main menu
 
-    # TODO - Write a better error message. Maybe create a manpage or help page to direct the user to?
-    # Return an error message if no JSON config files were found
-    if (( ${#CONFIG_FILES[@]} == 0 )); then echo "Could not find any configuration files"; exit 1; fi
-
+    # Attempts to find config read config file. The following is the order that it will look for the file:
+    # 1. $XDG_CONFIG_HOME/configspack/config.ini
+    # 2. $HOME/.configspack.ini
+    # 3. /path/to/configspack/configs/config.ini
+    
+    config_order=(
+        "$XDG_CONFIG_HOME/configspack/config.ini"
+        "$HOME/.configspack.ini"
+        "/etc/configspack/config.ini"
+        "$SCRIPT_PATH/configs/config.ini"
+    )
+    
+    # Read config file based on the order
+    for file in "${config_order[@]}"; do
+        if [ -f "$file" ]; then
+            CONFIG="$file"
+            break
+        fi
+    done
+    
+    # Raise error if no config file was found
+    if [ -z "$CONFIG" ]; then
+        printf "%s: Could not detect configuration file. For details about the file location, use \'%s --help\'\n" "$SCRIPT_NAME" "$SCRIPT_NAME"
+        return 1
+    fi
+    
+    # Gets a list of app names and assigns them to an array
+    apps_list="$($parser --root-sections --file $CONFIG)"
+    sorted_apps_str="${apps_list//[$'\t\r\n']/ }"
+    
+    IFS=' ' read -ra apps <<< "$sorted_apps_str"
+    
     # Get all labels from config files to display them in the main menu screen
     local menu_entries=( "Edit dotfiles" "" )
 
     # Iterate all config files
-    for config in "${CONFIG_FILES[@]}"; do
-        # Gets the filepath from JSON config
-        local dotfile="$(cat $config | jq -r '.dotfile')"
-
+    for app in "${apps[@]}"; do
         # Gets the dotfile description to display in the main menu
-        local description="$(cat "$config" | jq -r '.description')"
+        local description="$($parser    --file $CONFIG\
+                                        --value \
+                                        --section $app \
+                                        --key 'description')"
 
         # Assemble the main menu entries
-        menu_entries+=( "$dotfile" "         $description" )
+        menu_entries+=( "$app" "$description" )
     done
-
+    
     MENU="$(whiptail    --title "Configure Application" \
                         --menu "Select application to configure" \
                         --ok-button "Select" \
@@ -82,7 +112,7 @@ function main () {
     if [ "$?" = 1 ]; then cleanup; exit; fi
     
     # Go to edit dotfiles page if selected. Otherwise proceed with configuration
-    [ "${MENU[0]}" = "${menu_entries[0]}" ] && edit_config || bash_setup "$HOME/$MENU"
+    [ "${MENU[0]}" = "${menu_entries[0]}" ] && edit_config || bash_setup "$MENU"
 }
 
 cleanup () {
