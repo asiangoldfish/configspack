@@ -59,9 +59,13 @@ def get_all_nested_sections_str(arg_vars: str):
              parameters
     """
     
-    for elem in config.sections():
-        if arg_vars['--pattern'] in elem:
-            print(elem)
+    found_items = list()
+    for item in config.sections():
+        if arg_vars['--section'] in item:
+            print(item) if arg_vars['--verbose'] == 'True' else 'None'
+            found_items.append(item)
+
+    return found_items
 
 
 def validate_arg(argv: list, arg_vars: dict, arg):
@@ -127,6 +131,29 @@ def get_root_sections(section: dict):
             print(elem)
     set_exit_code(0)
 
+
+def create_field(arg_dict: dict):
+    """ Update an existing key
+        
+        Parameters:
+            - arg_dict (dict): This script's arguments and their values
+    """
+
+    # prevent get_all_nested_sections_str to output to stdin
+    old_verbose = arg_dict['--verbose']
+    arg_dict['--verbose'] = 'False'
+
+    for section in get_all_nested_sections_str(arg_dict):
+        # update the config file with the new key-value pair
+        config[f'{section}'][arg_dict[f'--key']] = arg_dict['--new-value']
+
+    with open(arg_dict['--file'], 'w') as configfile:
+        config.write(configfile)
+    
+    # restore the user argument for verbose
+    arg_dict['--verbose'] = old_verbose
+
+
 def usage():
     print("""parser.py [OPTION]
 parser.py [OPTIONS] [VALUES]
@@ -140,16 +167,17 @@ use the help flag with it.
 Example: parser.py --value --help
 
 Options:
-    -h, --help                                  this page
-        --root-sections                         gets the parent sections
-        --search-section [pattern]              search for sections with regex
-        --value [section] [key]                 gets the value from a given section and key
-        --version                               outputs version information and exit
+        --create-field [section] [key] [new value]  create or update a field in specified sections
+    -h, --help                                      this page
+        --root-sections                             gets the parent sections
+        --search-section [section]                  search for sections with regex
+        --value [section] [key]                     gets the value from a given section and key
+        --version                                   outputs version information and exit
 
 Values:
-        --pattern                               parent of nested sections
-        --section                               definite section to use
-        --file                                  target initialization file to parse
+        --section                                   definite section to use
+        --file                                      target initialization file to parse
+        --new-value                                 new value to assign to a key
 """,
           end='')
     set_exit_code(0)
@@ -161,12 +189,23 @@ if len(argv) == 1:
     sysexit(get_exit_code())
 
 # let script execution call functions based on the script argv
+arg_funcs = {
+    '--create-field': create_field,
+    '--root-sections': get_root_sections,
+    '--search-section': get_all_nested_sections_str,
+    '--value': get_value,
+}
+
+# let script execution call functions based on the script argv
 arg_vars = {
     '--debug': '',
     '--file': '',
     '--key': '',
+    'missing_arg_error': '',
+    '--new-value': '',
     '--pattern': '',
     '--section': '',
+    '--verbose': '',
 }
 
 # we create a hard copy of argv to avoid manipulating it
@@ -174,53 +213,31 @@ process_argv = argv.copy()
 # remove file name in arr
 process_argv.pop(0)
 
-# stores the identifier to invoke a given function at a later point when all
-# arguments have been parsed
-skip_arg = False
+# call the help page
+if process_argv[0] == '-h' or process_argv[0] == '--help':
+    usage()
+    sysexit(0)
 
-for i, arg in enumerate(process_argv):
-    if not skip_arg:
-        match arg:
-            # match functions
-            case '-h' | '--help':
-                usage()
-            case '--root-sections':
-                execute_function = get_root_sections
-            case '--search-section':
-                execute_function = get_all_nested_sections_str
-            case '--value':
-                execute_function = get_value
+skip_arg = False                            # whether to skip the next argument
 
-            # match arguments
-            case '--debug':
-                if i + 1 < len(argv):
-                    next_arg = argv[i + 1]
-                    if next_arg in arg_vars.keys():
-                        if next_arg != True or False:
-                            print(f'Argument {arg} requires argument True or False')
-                            sysexit(2)
+# iterate all argv for the first found argument for function call
+for key in arg_funcs.keys():
+    for arg in process_argv:
+        if key == arg:
+            execute_function = arg_funcs[f'{key}']
+    if skip_arg == True:                    # exit loop if the function was found
+        break
 
-                arg_vars['--debug'] = process_argv[i + 1]
-                skip_arg = True
+for key in arg_vars.keys():
+    for i, arg in enumerate(process_argv):
+        if skip_arg:
+            skip_arg = False
+            continue
 
-            case '--file':
-                validate_arg(process_argv, arg_vars, arg)
-                arg_vars['--file'] = process_argv[i + 1]
-                skip_arg = True
-            case '--key':
-                validate_arg(process_argv, arg_vars, arg)
-                arg_vars['--key'] = process_argv[i + 1]
-                skip_arg = True
-            case '--pattern':
-                validate_arg(process_argv, arg_vars, arg)
-                arg_vars['--pattern'] = process_argv[i + 1]
-                skip_arg = True
-            case '--section':
-                validate_arg(process_argv, arg_vars, arg)
-                arg_vars['--section'] = process_argv[i + 1]
-                skip_arg = True
-    else:
-        skip_arg = False
+        if key == arg:
+            validate_arg(process_argv, arg_vars, key)
+            arg_vars[f'{arg}'] = process_argv[i + 1]
+            skip_arg = True
 
 # read the config file
 read_configs = config.read(arg_vars['--file'])
@@ -230,9 +247,10 @@ if len(read_configs) == 0:
     print('No configuration file was passed')
     sysexit(5)
 
-try:
-    execute_function(arg_vars)
-except NameError:
-    print(f'{argv[0]}: No actions to execute. Use \'{argv[0]} --help\' for a list of commands')
+execute_function(arg_vars)
+#try:
+#    execute_function(arg_vars)
+#except NameError:
+#    print(f'{argv[0]}: No actions to execute. Use \'{argv[0]} --help\' for a list of commands')
 
 sysexit(get_exit_code())
