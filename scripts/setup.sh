@@ -3,18 +3,17 @@ function get_subcategories() {
     ### Arguments:
     ###     - category [str]: The category that this subcategories belong to
     ###     - search_depth [int]: Nested sections depth
-    ### Returns:
-    ###     - string(): A string array with subcategories
     ### Example:
     ###     - get_subcategories "foo"
 
-    local subcategories
+    local subcat_str
+    local subcat
     local depth
     depth="$2"
-
+    
     subcat="$($parser --file $CONFIG \
             --search-section \
-            --pattern "$1" | \
+            --section "$1" | \
             awk 'BEGIN{FS="/"};{print $'"$depth"'}' | \
             sed '$!N; /^\(.*\)\n\1$/!P; D' | sed '/^$/d')"
  
@@ -51,8 +50,12 @@ function bash_setup () {
                             "${new_menu[@]}" \
                             3>&1 1>&2 2>&3 )"
 
-# Prompt the user to override bashrc with the new changes
-    [[ "$?" = 1 ]] && override_bashrc "$CONFIGS" "$dotfile" "${dotfile_no_dot[1]}"
+    # Prompt the user to override bashrc with the new changes
+    #[[ "$?" = 1 ]] && override_bashrc "$CONFIGS" "$dotfile" "${dotfile_no_dot[1]}"
+
+    # Returns to bash menu if cancelled
+    [ $? = 1 ] && main
+
 
     # Direct user to the selected menu
     completions "${menu}" "$1"
@@ -85,14 +88,25 @@ function completions () {
     # Gets all subcategories in the menu
     IFS=" " read -ra subcategories <<< "$(get_subcategories "$category" 3)"
     
-
-    # Generate menu entries
+    # config settings for already activated options
     for subcat in "${subcategories[@]}"; do
-        description="$($parser --value \
+        entry="$($parser            --value \
                                     --file $CONFIG \
                                     --section $app_name/$category/$subcat \
+                                    --key checked)"
+        original_entry+=( "$entry" )
+    done
+    unset entry
+
+    # Generate menu entries
+    local categories="$()"
+    local index=0
+    for ((i = 0; i < ${#subcategories[@]}; ++i)); do
+        description="$($parser --value \
+                                    --file $CONFIG \
+                                    --section $app_name/$category/${subcategories[i]} \
                                     --key description)"
-        menu_entry+=( "$subcat" "$description" 'ON' )
+        menu_entry+=( "${subcategories[i]}" "$description" "${original_entry[i]}" )
     done
 
     # Build the checklist menu
@@ -112,9 +126,28 @@ function completions () {
 
     local menu_options; mapfile -t menu_options <<< "$menu"
     
-    echo "${menu_options[@]}"
-    exit
+    # manipulates the config to mirror the activated menu entries above
+    for subcat in "${subcategories[@]}"; do
+        "$parser"   --create-field \
+                    --file $CONFIG \
+                    --section $app_name/$category/$subcat \
+                    --key checked \
+                    --new-value False
+        
+        # if the menu entry was selected, then 'checked' in config is True
+        for item in "${menu_options[@]}"; do
+            if [ "$subcat" == "$item" ]; then
+                "$parser"   --create-field \
+                            --file $CONFIG \
+                            --section $app_name/$category/$subcat \
+                            --key checked \
+                            --new-value True
+                break
+            fi
+        done
+    done
 
+    exit
     # Go back to submenu
     bash_setup "$dotfile"
 }

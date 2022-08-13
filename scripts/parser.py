@@ -205,13 +205,12 @@ arg_vars = {
     '--new-value': '',
     '--pattern': '',
     '--section': '',
-    '--verbose': '',
+    '--verbose': 'True',
 }
 
-# we create a hard copy of argv to avoid manipulating it
-process_argv = argv.copy()
-# remove file name in arr
-process_argv.pop(0)
+# we create a hard copy of argv to avoid manipulating it,
+# then we remove the file name from the new array
+process_argv = argv.copy(); process_argv.pop(0)
 
 # call the help page
 if process_argv[0] == '-h' or process_argv[0] == '--help':
