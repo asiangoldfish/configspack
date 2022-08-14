@@ -50,11 +50,8 @@ function bash_setup () {
                             "${new_menu[@]}" \
                             3>&1 1>&2 2>&3 )"
 
-    # Prompt the user to override bashrc with the new changes
-    #[[ "$?" = 1 ]] && override_bashrc "$CONFIGS" "$dotfile" "${dotfile_no_dot[1]}"
-
     # Returns to bash menu if cancelled
-    [ $? = 1 ] && main
+    [ "$?" = 1 ] && main
 
 
     # Direct user to the selected menu
@@ -88,6 +85,7 @@ function completions () {
     # Gets all subcategories in the menu
     IFS=" " read -ra subcategories <<< "$(get_subcategories "$category" 3)"
     
+    local entry
     # config settings for already activated options
     for subcat in "${subcategories[@]}"; do
         entry="$($parser            --value \
@@ -97,7 +95,7 @@ function completions () {
         original_entry+=( "$entry" )
     done
     unset entry
-
+    
     # Generate menu entries
     local categories="$()"
     local index=0
@@ -106,7 +104,9 @@ function completions () {
                                     --file $CONFIG \
                                     --section $app_name/$category/${subcategories[i]} \
                                     --key description)"
-        menu_entry+=( "${subcategories[i]}" "$description" "${original_entry[i]}" )
+        menu_entry+=(   "${subcategories[i]}"
+                        "$description"
+                        "${original_entry[i]}" )
     done
 
     # Build the checklist menu
@@ -119,6 +119,7 @@ function completions () {
                                     "${menu_entry[@]}" \
                                     3>&1 1>&2 2>&3)"
 
+    unset menu_entry
 
     # Returns to bash menu if cancelled
     [ $? = 1 ] && bash_setup "Bash"
@@ -128,67 +129,65 @@ function completions () {
     
     # manipulates the config to mirror the activated menu entries above
     for subcat in "${subcategories[@]}"; do
-        "$parser"   --create-field \
-                    --file $CONFIG \
-                    --section $app_name/$category/$subcat \
-                    --key checked \
-                    --new-value False
+        section="$app_name/$category/$subcat"
         
-        # if the menu entry was selected, then 'checked' in config is True
+        # if the menu entry was selected, then 'checked' in config is ON
         for item in "${menu_options[@]}"; do
             if [ "$subcat" == "$item" ]; then
-                "$parser"   --create-field \
-                            --file $CONFIG \
-                            --section $app_name/$category/$subcat \
-                            --key checked \
-                            --new-value True
-                break
+                "$parser"           --create-field \
+                                    --file $CONFIG \
+                                    --section $section \
+                                    --key checked \
+                                    --new-value ON
+                continue 2
             fi
         done
+        "$parser"               --create-field \
+                                --file $CONFIG \
+                                --section $section \
+                                --key checked \
+                                --new-value OFF
     done
 
-    exit
+    # if any changes were made, then register this application to the array of affected dotfiles
+    local available_sections
+    IFS=' ' read -ra available_sections <<< "$($parser  --search-section \
+                                                        --file $CONFIG \
+                                                        --section $app_name/$category/ \
+                                                        --new-line False)"
+
+    local original_check
+    local new_check
+    for section in "${available_sections[@]}"; do
+        original_check=( "$($parser --value \
+                                      --file $ORIGINAL_CONFIG \
+                                      --section $section \
+                                      --key checked)"
+                                  )
+        new_check=( "$($parser      --value \
+                                      --file $CONFIG \
+                                      --section $section \
+                                      --key checked)"
+                                  )
+        
+        # compare the original and the new value. If they are not the same, then
+        # we know that a change was made
+        if [ "$original_checks" != "$new_check" ]; then
+            # avoid writing duplicate entries to AFFECTED_DOTFILES
+            for name in "${AFFECTED_DOTFILES[@]}"; do
+                if [ "$app_name" == "$name" ]; then
+                    does_name_exist=True
+                    break 2
+                fi
+            done
+        fi
+    done
+
+    if [ -z "$does_name_exist" ]; then AFFECTED_DOTFILES+=( "$app_name" ); fi
+
+    unset category subcategories menu_entry subcat description menu categories index menu_options has_changes_been_made get_checked section original_entry
+
     # Go back to submenu
-    bash_setup "$dotfile"
+    bash_setup "$app_name"
 }
 
-function override_bashrc() {
-    ### Based on the checkboxes in JSON config, generate a new dotfile
-    ###
-    ### Arguments:
-    ###     - config [string]: JSON config file to pull from
-    ###     - dotfile_path [string]: Path to dotfile to apply changes to
-    ###     - dotfile_no_dot [string]: Dotfile name without the dot
-
-    # Map args to variables
-    local config="$1"
-    local dotfile_path="$2"
-    local dotfile_no_dot="$3"
-
-    # Confirm changes
-    whiptail --yesno 'Save changes to dotfile?' 10 78 3
-    [ "$?" -eq 1 ] && main
-
-    # Generate new dotfile with boilerplate code if available
-    [ -f "$dotfile_path" ] && rm "$dotfile_path" && touch "$dotfile_path"
-
-    local templates="$SCRIPT_PATH/templates/$dotfile_no_dot.templates.txt"
-    [ -f "$templates" ] && cat "$templates" > "$dotfile_path" && echo "" >> "$dotfile_path"
-
-    # Iterate over all categories, then for each of the subcategories
-    # copy the snippets to the dotfile if its checkbox is ON
-    local categories; mapfile -t categories <<< "$(cat "$config" | jq -r ".categories | keys[]")"
-    
-    for cat in "${categories[@]}"; do
-        local subcategories; mapfile -t subcategories <<< "$(cat "$config" | jq -r ".categories.$cat.subCategory | keys[]")"
-
-        for subcat in "${subcategories[@]}"; do
-            # Finally, copy snippets to dotfile if checkbox is ON
-            checkbox="$(jq -r ".categories.$cat.subCategory.$subcat.checkbox" "$config")"
-            [[ "$checkbox" = "ON" ]] && jq -r ".categories.$cat.subCategory.$subcat.snippet" "$config" >> "$dotfile" && echo "" >> "$dotfile"
-        done
-    done
-
-    # Back to main menu
-    main
-}

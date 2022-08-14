@@ -7,13 +7,14 @@
 #   3: The function name passed as argument is invalid
 #   4: Script was executed with invalid arguments [VALUES]
 #   5: No config file path was passed
-#   6: Argument '--value' requires a valid section and key
+#   6: Argument '--value' requires a valid section
+#   7: Argument '--value' requires a valid key
 
 from sys import exit as sysexit                         # exit script
 from sys import argv                                    # handle script args
 from pathlib import Path                                # get file paths
 from configparser import ConfigParser                   # parse ini file
-from configparser import NoSectionError                 
+from configparser import NoSectionError, NoOptionError
 
 exit_code = 0                                           # exit code to stderr
 
@@ -61,9 +62,17 @@ def get_all_nested_sections_str(arg_vars: str):
     
     found_items = list()
     for item in config.sections():
-        if arg_vars['--section'] in item:
-            print(item) if arg_vars['--verbose'] == 'True' else 'None'
-            found_items.append(item)
+        if arg_vars['--section'] not in item:
+            continue
+
+        if arg_vars['--verbose'] == 'True':
+            # print(item) if arg_vars['--new-line'] == 'True' else print(item, end=' ')
+            if arg_vars['--new-line'] == 'True':
+                print(item)
+            else:
+                print(item, end=' ')
+
+        found_items.append(item)
 
     return found_items
 
@@ -111,15 +120,19 @@ def get_value(arg_dict: dict):
     Return:
         str: Value based on section and key
     """
-    
+
+    # throw an error if the value cannot be fetched
     try:
         value = config.get(arg_dict['--section'], arg_dict['--key'])
         print(value)
     except NoSectionError:
-        print('parser.py: Argument \'--value\' requires valid section and key')
+        print('parser.py: Argument --value requires a valid section')
         set_exit_code(6)
         return
-    set_exit_code(0)
+    except NoOptionError:
+        print('parser.py: Argument --value requires a valid key')
+        set_exit_code(7)
+        return
 
 
 def get_root_sections(section: dict):
@@ -128,7 +141,10 @@ def get_root_sections(section: dict):
 
     for elem in config.sections():
         if not '/' in elem:
-            print(elem)
+            if section['--new-line'] in ('Yes', 'y', 'True', 'true'):
+                print(elem)
+            else:
+                print(elem, end=' ')
     set_exit_code(0)
 
 
@@ -175,10 +191,12 @@ Options:
         --version                                   outputs version information and exit
 
 Values:
-        --section                                   definite section to use
+        --key                                       key to search for
         --file                                      target initialization file to parse
         --new-value                                 new value to assign to a key
-""",
+        --section                                   definite section to use
+        --new-line                                  whether to output stream of data, each on a new line. Default: True
+        """,
           end='')
     set_exit_code(0)
 
@@ -202,6 +220,7 @@ arg_vars = {
     '--file': '',
     '--key': '',
     'missing_arg_error': '',
+    '--new-line': 'True',
     '--new-value': '',
     '--pattern': '',
     '--section': '',
