@@ -9,12 +9,13 @@
 #   5: No config file path was passed
 #   6: Argument '--value' requires a valid section
 #   7: Argument '--value' requires a valid key
+#   8: Failed to parse the configuration file
 
 from sys import exit as sysexit                         # exit script
 from sys import argv                                    # handle script args
 from pathlib import Path                                # get file paths
 from configparser import ConfigParser                   # parse ini file
-from configparser import NoSectionError, NoOptionError
+from configparser import NoSectionError, NoOptionError, ParsingError
 
 exit_code = 0                                           # exit code to stderr
 
@@ -85,6 +86,19 @@ def validate_arg(argv: list, arg_vars: dict, arg):
     else:
         print(f'Missing argument: {arg}')
         sysexit(2)
+
+def validate_config(arg_dict: list):
+    """Validate the configuration file
+    """
+    if arg_dict['--file'] == '':
+        print('parser.py: Argument --validate-config needs a configuration file to read')
+        set_exit_code(1)
+
+    try:
+        config.read(arg_dict['--file'])
+    except ParsingError as e:
+        print('parser.py: Configuration has syntax errors')
+        sysexit(8)
 
 
 def set_exit_code(num: int):
@@ -187,6 +201,7 @@ Options:
     -h, --help                                      this page
         --root-sections                             gets the parent sections
         --search-section [section]                  search for sections with regex
+        --validate-config                           checks configuration file for syntax errors
         --value [section] [key]                     gets the value from a given section and key
         --version                                   outputs version information and exit
 
@@ -211,6 +226,7 @@ arg_funcs = {
     '--create-field': create_field,
     '--root-sections': get_root_sections,
     '--search-section': get_all_nested_sections_str,
+    '--validate-config': validate_config,
     '--value': get_value,
 }
 
@@ -258,6 +274,7 @@ for key in arg_vars.keys():
             skip_arg = True
 
 # read the config file
+validate_config(arg_vars)
 read_configs = config.read(arg_vars['--file'])
 
 # if config file was unsuccessfully read, then exit the program

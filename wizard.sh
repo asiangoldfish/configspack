@@ -76,10 +76,15 @@ function main () {
             if [ -f "$file" ]; then
                 ORIGINAL_CONFIG="$file"
                 CONFIG="$TMP/config.ini"
-
+                
+                # Validates the configuration file
+                $parser --validate-config \
+                        --file "$ORIGINAL_CONFIG"
+                if [ "$?" != 0 ]; then exit; fi
+                
                 # Validate all application filepaths in the config file
                 validate_filepaths
-    
+
                 if [ ! -d "$TMP" ]; then mkdir "$TMP"; fi
                     cp "$ORIGINAL_CONFIG" "$CONFIG"
                 break
@@ -249,6 +254,9 @@ function save_changes() {
     done
     
     unset backup_files
+
+    # update the original config file with the new one
+    cp "$CONFIG" "$ORIGINAL_CONFIG" || { printf echo "$SCRIPT_NAME: Could not update the configuration file with new settings"; exit; }
     #cleanup
 }
 
