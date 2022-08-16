@@ -30,25 +30,30 @@ function dependency_check () {
 
 
 function usage () {
-    printf 'Version %s
-Usage:  %s
-        %s [OPTION]
+    echo -n "Version $VERSION
+Usage:  $SCRIPT_NAME
+        $SCRIPT_NAME [OPTION]
 
 Manage configuration files
 
-Deploy or edit configuration files across the system. %s manages them from a single file,
-making them portable between different UNIX and UNIX-like systems. The master configuration file is
-read from the following locations:
-
-- $XDG_CONFIG_HOME/configspack/config.ini
-- $HOME/.configspack.ini
-- /etc/configspack/config.ini
-- $HOME/$SCRIPT_PATH/configs/config.ini
+Deploy or edit configuration files across the system. $SCRIPT_NAME manages them from a
+single file, making them portable between different UNIX and UNIX-like systems.
 
 Option:
         --edit-configs      add, remove, edit configurations and entries
         --help              this page
-' "$VERSION" "$SCRIPT_NAME" "$SCRIPT_NAME" "$SCRIPT_NAME"
+
+Master configuration file location in order of priority:
+
+\$XDG_CONFIG_HOME/configspack/config.ini
+\$HOME/.configspack/config.ini
+/etc/configspack/config.ini
+[path/to/script]/configs/config.ini
+
+Exit codes:
+0   if OK,
+8   if master configuration file has syntax errors
+"
 }
 
 
@@ -67,36 +72,7 @@ function main () {
         "$SCRIPT_PATH/configs/config.ini"
     )
     
-    # Read config file based on the order
-    # If a file has been found, then create a copy of it to be used throughout
-    # the application runtime
-    # If no files were found, then exit the application
-    if [ -z "$ORIGINAL_CONFIG" ]; then
-        for file in "${config_order[@]}"; do
-            if [ -f "$file" ]; then
-                ORIGINAL_CONFIG="$file"
-                CONFIG="$TMP/config.ini"
-                
-                # Validates the configuration file
-                $parser --validate-config \
-                        --file "$ORIGINAL_CONFIG"
-                if [ "$?" != 0 ]; then exit; fi
-                
-                # Validate all application filepaths in the config file
-                validate_filepaths
-
-                if [ ! -d "$TMP" ]; then mkdir "$TMP"; fi
-                    cp "$ORIGINAL_CONFIG" "$CONFIG"
-                break
-            fi
-        done
-    fi
-
-    # Raise error if no config file was found
-    if [ -z "$CONFIG" ]; then
-        printf "%s: Could not detect configuration file. For details about the file location, use \'%s --help\'\n" "$SCRIPT_NAME" "$SCRIPT_NAME"
-        return 1
-    fi
+    validate_config
 
     # Gets a list of app names and assigns them to an array
     apps_list="$($parser --root-sections --file $CONFIG)"
@@ -128,7 +104,7 @@ function main () {
                         "${menu_entries[@]}" \
                         3>&1 1>&2 2>&3 )"
 
-    if [ "$?" = 1 ]; then save_changes; exit; fi
+    if [ "$?" = 1 ]; then save_changes; exit 0; fi
     
     # Go to edit dotfiles page if selected. Otherwise proceed with configuration
     [ "${MENU[0]}" = "${menu_entries[0]}" ] && edit_config || bash_setup "$MENU"
@@ -170,21 +146,73 @@ function update_dotfile() {
     local features="$($parser       --search-section \
                                     --file $CONFIG \
                                     --section $app_name/ \
-                                    --new-line True | \
-                                    awk -F/ '{ if ($3 != "") { print } }' | \
-                                    awk NF)"                    # print only non-empty lines
+                                    --new-line True)"
 
     features="$(echo "$features" | tr '\n' ' ' )"
     IFS=" " read -ra features_list <<< "$features"
 
-    # Copy code snippets into the named dotfile
+    # Copy code snippets into the named dotfile only if enabled
     for feature in "${features_list[@]}"; do
-        $parser     --value\
-                    --file $CONFIG \
-                    --section $feature \
-                    --key snippet >> "$filepath"
-        printf '\n' >> "$filepath"
+        # Ensures that only the features are included, not categories
+        IFS='/' read -ra feature_validate <<< "$feature"
+        if [ "${feature_validate[2]}" == '' ]; then continue; fi
+
+        is_checked="$($parser   --value \
+                                --file $CONFIG \
+                                --section $feature \
+                                --key checked)"
+
+        if [ "$is_checked" == 'ON' ]; then
+            echo -e "$($parser     --value\
+                        --file $CONFIG \
+                        --section $feature \
+                        --key snippet)" >> "$filepath"
+            printf '\n' >> "$filepath"
+        fi
     done
+}
+
+function validate_config() {
+    # Validates the master configuration file
+    #
+    # Returns:
+    #   0: success
+    #   8: validation failed with syntax errors
+
+    # Read config file based on the order
+    # If a file has been found, then create a copy of it to be used throughout
+    # the application runtime
+    # If no files were found, then exit the application
+    if [ -z "$ORIGINAL_CONFIG" ]; then
+        for file in "${config_order[@]}"; do
+            if [ -f "$file" ]; then
+                ORIGINAL_CONFIG="$file"
+                CONFIG="$TMP/config.ini"
+                
+                # Validates the configuration file and outputs the error message
+                # if debug mode is activated
+                $parser --validate-config --file "$ORIGINAL_CONFIG"
+                local parser_exitcode="$?"
+
+                if [ "$parser_exitcode" != 0 ]; then exit "$parser_exitcode"; fi
+                
+                # Validate all application filepaths in the config file
+                validate_filepaths
+                
+                # creates a copy of the master config that the user will edit
+                if [ ! -d "$TMP" ]; then mkdir "$TMP"; fi
+                    cp "$ORIGINAL_CONFIG" "$CONFIG"
+                break
+            fi
+        done
+    fi
+
+    # Raise error if no config file was found
+    if [ -z "$CONFIG" ]; then
+        echo -n "$SCRIPT_NAME: Could not detect master configuration file.
+        For details about file location, use '$SCRIPT_NAME --help'"
+        return 1
+    fi
 }
 
 function validate_filepaths() {
@@ -234,8 +262,6 @@ function save_changes() {
     
     IFS=' ' read -ra root_sections <<< "$roots"
     
-    invalid_filepaths=()
-
     # prepare for backing up files
     # create .cache if it does not exist
     backup_files="$($parser --value \
@@ -249,7 +275,7 @@ function save_changes() {
 
         for root in "${root_sections[@]}"; do
             if [[ "$root" =~ [Dd]'efault' ]]; then continue; fi
-            if [ "$file" == "$root" ]; then update_dotfile "$file" "$backup_files"; fi
+            if [ "$file" == "$root" ]; then echo "$file"; update_dotfile "$file" "$backup_files"; fi
         done
     done
     
@@ -262,9 +288,15 @@ function save_changes() {
 
 for arg in "$@"; do
     case "$arg" in
-        "--edit-configs") edit_configs; exit;;
-        "--help") usage; exit;;
-        *) printf "Invalid option: '%s'\nMore info with 'wizard.sh --help'\n" "$arg"; exit;;
+        '--debug') DEBUG=True;;
+        '--edit-configs') edit_configs; exit;;
+        '--help') usage; exit;;
+
+        *)
+            echo "$SCRIPT_NAME: option '$arg' is not recognized"
+            echo "Try '$SCRIPT_NAME --help' for more information"
+            exit
+            ;;
     esac
     shift
 done
