@@ -42,6 +42,10 @@ single file, making them portable between different UNIX and UNIX-like systems.
 Option:
         --edit-configs      add, remove, edit configurations and entries
         --help              this page
+        --save [apps]       apply settings from master configuration file to named
+                            applications
+        --save-all          apply settings from master configuration file to all
+                            applications
 
 Master configuration file location in order of priority:
 
@@ -52,6 +56,8 @@ Master configuration file location in order of priority:
 
 Exit codes:
 0   if OK,
+2   if --save was used with invalid arguments. Arguments must correspond to
+    an applciation name, according to the master configuration file
 8   if master configuration file has syntax errors
 "
 }
@@ -64,13 +70,6 @@ function main () {
     # 1. $XDG_CONFIG_HOME/configspack/config.ini
     # 2. $HOME/.configspack.ini
     # 3. /path/to/configspack/configs/config.ini
-    
-    config_order=(
-        "$XDG_CONFIG_HOME/configspack/config.ini"
-        "$HOME/.configspack/config.ini"
-        "/etc/configspack/config.ini"
-        "$SCRIPT_PATH/configs/config.ini"
-    )
     
     validate_config
 
@@ -183,6 +182,14 @@ function validate_config() {
     # If a file has been found, then create a copy of it to be used throughout
     # the application runtime
     # If no files were found, then exit the application
+
+    config_order=(
+        "$XDG_CONFIG_HOME/configspack/config.ini"
+        "$HOME/.configspack/config.ini"
+        "/etc/configspack/config.ini"
+        "$SCRIPT_PATH/configs/config.ini"
+    )
+    
     if [ -z "$ORIGINAL_CONFIG" ]; then
         for file in "${config_order[@]}"; do
             if [ -f "$file" ]; then
@@ -247,11 +254,119 @@ function validate_filepaths() {
     fi
 }
 
+function direct_save() {
+    # Configure all or named application based on the master configuration file
+
+    validate_config
+
+    # Validate app
+    local root_sections="$($parser  --root-sections \
+                                    --file $ORIGINAL_CONFIG \
+                                    --new-line False)"
+    local roots
+    IFS=' ' read -ra roots <<< "$root_sections"
+
+    local section
+    for section in "${roots[@]}"; do
+        if [[ "$section" =~ [Dd]'efault' ]]; then continue; fi
+        app_names+=( "$($parser --value \
+                                --file $ORIGINAL_CONFIG \
+                                --section $section \
+                                --key app)" )
+    done
+
+    local apps
+    # Checks if SAVE_ALL or SAVE_APP is enabled
+    if [ ! -z "$SAVE_APPS" ]; then
+        IFS=' ' read -ra save_apps <<< "$SAVE_APPS"
+    elif [ ! -z "$SAVE_ALL" ]; then
+        IFS=' ' read -ra save_apps <<< "$app_names"
+    fi
+
+    # Matches app name and sections in master config. If they don't match,
+    # then throw an error back to the user
+    local app
+    for arg in "${save_apps[@]}"; do
+        if [[ "$arg" =~ [Dd]'efault' ]] || [ "$arg" == "--save" ]; then continue; fi
+        for app in "${app_names[@]}"; do
+            if [ "$arg" == "$app" ]; then
+                continue 2
+            fi
+        done
+
+        invalid_apps+=( "$arg" )                # App was not found
+    done
+    unset app
+
+    # Report back to user if invalid apps were found
+    if [ ! -z "$invalid_apps" ]; then
+        echo -e "The following apps could not be recognized:\n"
+        for app in "${invalid_apps[@]}"; do
+            echo "$app"
+        done
+        echo -e "\nPlease make sure to match the section names of the master configuration file.
+Look for exit code 2 after using \'$SCRIPT_PATH --help\' for more
+info."
+        exit 1
+    fi
+
+    local get_options options option
+    # Save to files
+    for app in "${save_apps[@]}"; do
+        if [[ "$app" =~ [Dd]'efault' ]] || [ "$app" == "--save" ]; then continue; fi
+
+        get_options="$($parser  --search-section \
+                                --file "$ORIGINAL_CONFIG" \
+                                --section "$app/")"
+
+        IFS=' ' read -ra options <<< "$(echo $get_options | \
+                                        sed '$!N; /^\(.*\)\n\1$/!P; D' | \
+                                        sed '/^$/d')"
+        
+        # Create new file and apply templates to the file
+        local file="$($parser   --value \
+                                --file "$ORIGINAL_CONFIG" \
+                                --section "$app" \
+                                --key filepath)"
+
+        cat "$($parser      --value \
+                            --file "$ORIGINAL_CONFIG" \
+                            --section "$app" \
+                            --key 'template')" > "$file"
+
+        for option in "${options[@]}"; do
+            # Filters the option to remove application and categories name
+            IFS='/' read -ra checked_verify <<< "$option"
+            filtered_option="$( echo "${checked_verify[@]}" | \
+                                awk '{print $3}')"
+            
+            # Skip empty lines
+            if [ -z "$filtered_option" ]; then continue; fi
+
+            # If this option is checked, then include this feature
+            local checked="$($parser    --value \
+                                        --file $ORIGINAL_CONFIG \
+                                        --section $option \
+                                        --key checked)"
+            
+            if [ "$checked" == 'ON' ]; then
+                snippet="$($parser  --value \
+                                    --file "$ORIGINAL_CONFIG" \
+                                    --section "$option" \
+                                    --key 'snippet')"
+                echo -e "$snippet\n" >> "$file"
+            fi
+        done
+
+    done
+    unset get_options options option
+}
+
 function save_changes() {
     # If the user has made any changes, then save and overwrite affected dot files
     
     local file_path
-
+    
     # Checks if any changes actually were made
     diff $CONFIG $ORIGINAL_CONFIG > /dev/null; if [ "$(echo $?)" == 0 ]; then exit; fi
 
@@ -286,10 +401,12 @@ function save_changes() {
     #cleanup
 }
 
+i=0
 for arg in "$@"; do
     case "$arg" in
-        '--debug') DEBUG=True;;
         '--edit-configs') edit_configs; exit;;
+        '--save') SAVE_APPS="$@"; direct_save; exit;;
+        '--save-all') SAVE_ALL=True; direct_save; exit;;
         '--help') usage; exit;;
 
         *)
@@ -299,6 +416,8 @@ for arg in "$@"; do
             ;;
     esac
     shift
+
+    ((i+=1))
 done
 
 # Checks for dependencies
