@@ -140,7 +140,14 @@ function update_dotfile() {
                                     --section $app_name \
                                     --key template)"
 
-    if [ ! -z "$template_filepath" ]; then cat "$template_filepath" > "$filepath"; fi
+    if [ ! -z "$template_filepath" ]; then
+        if [ ! -f "$template_filepath" ]; then
+            echo "$SCRIPT_NAME: Could not find template file path $template_filepath."
+            exit 1
+        fi
+        
+        cat "$template_filepath" > "$filepath";
+    fi
 
     local features="$($parser       --search-section \
                                     --file $CONFIG \
@@ -280,12 +287,13 @@ function direct_save() {
     if [ ! -z "$SAVE_APPS" ]; then
         IFS=' ' read -ra save_apps <<< "$SAVE_APPS"
     elif [ ! -z "$SAVE_ALL" ]; then
-        IFS=' ' read -ra save_apps <<< "$app_names"
+        local app
+        for app in "${app_names[@]}"; do save_apps+=( "$app" ); done
     fi
 
     # Matches app name and sections in master config. If they don't match,
     # then throw an error back to the user
-    local app
+    unset app; local app
     for arg in "${save_apps[@]}"; do
         if [[ "$arg" =~ [Dd]'efault' ]] || [ "$arg" == "--save" ]; then continue; fi
         for app in "${app_names[@]}"; do
@@ -310,10 +318,14 @@ info."
         exit 1
     fi
 
+    echo "Setting up configurations..."
+
     local get_options options option
     # Save to files
     for app in "${save_apps[@]}"; do
         if [[ "$app" =~ [Dd]'efault' ]] || [ "$app" == "--save" ]; then continue; fi
+
+        printf "Saving $app\'s configuration\n"
 
         get_options="$($parser  --search-section \
                                 --file "$ORIGINAL_CONFIG" \
@@ -329,10 +341,18 @@ info."
                                 --section "$app" \
                                 --key filepath)"
 
-        cat "$($parser      --value \
-                            --file "$ORIGINAL_CONFIG" \
-                            --section "$app" \
-                            --key 'template')" > "$file"
+        local template_path="$($parser      --value \
+                                            --file "$ORIGINAL_CONFIG" \
+                                            --section "$app" \
+                                            --key 'template')"
+
+        if [ ! -f "$template_path" ]; then
+            echo "$SCRIPT_NAME: Could not find template path: $template_path"
+            echo "Please change the template path for application $app"
+            exit 1
+        fi
+
+        cat "$template_path" > "$file"
 
         for option in "${options[@]}"; do
             # Filters the option to remove application and categories name
@@ -360,6 +380,11 @@ info."
 
     done
     unset get_options options option
+
+    echo "Configuration setups complete!"
+    
+    # Assume that the saving was complete
+    exit 0
 }
 
 function save_changes() {
