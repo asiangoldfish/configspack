@@ -168,7 +168,7 @@ function update_dotfile() {
                                 --section $feature \
                                 --key checked)"
 
-        if [ "$is_checked" == 'ON' ]; then
+        if [ "$is_checked" == 'True' ]; then
             echo -e "$($parser     --value\
                         --file $CONFIG \
                         --section $feature \
@@ -369,12 +369,19 @@ info."
                                         --section $option \
                                         --key checked)"
             
-            if [ "$checked" == 'ON' ]; then
+            if [ "$checked" == 'True' ]; then
                 snippet="$($parser  --value \
                                     --file "$ORIGINAL_CONFIG" \
                                     --section "$option" \
                                     --key 'snippet')"
-                echo -e "$snippet\n" >> "$file"
+                echo "$snippet" >> "$file"
+
+                # Insert newline if enabled
+                if [ "$("$parser"   --value \
+                                    --file "$ORIGINAL_CONFIG" \
+                                    --section "$option" \
+                                    --key 'newline')" == 'True' ]; then
+                    printf '\n' >> "$file"; fi
             fi
         done
 
