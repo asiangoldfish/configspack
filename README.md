@@ -1,6 +1,6 @@
 # Configspack
 
-Configspack is a post-installation script for UNIX-like systems and is written purely with Bash. It's a terminal user interface application, highly customizable and allows for quickly generating new or editing existing dotfiles.
+Configspack is a post-installation script for UNIX-like systems and is written purely with Bash. It's a terminal user interface application and allows for quickly generating new or editing existing dotfiles.
 
 **Disclaimer:** This project is still in development and all features are a subject of change for improvement.
 
